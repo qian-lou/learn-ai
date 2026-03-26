@@ -1,51 +1,118 @@
-# 微积分与优化（梯度下降）
-# Calculus and Optimization (Gradient Descent)
+# 微积分与优化
+# Calculus and Optimization
 
 ## 1. 背景（Background）
 
-> 神经网络训练的核心就是"梯度下降"——计算损失函数对参数的梯度，然后沿梯度方向更新参数。理解梯度下降是理解模型训练过程的关键。
+> **为什么要学这个？**
+>
+> 梯度下降是训练所有深度学习模型的核心算法。理解偏导数、链式法则、学习率调度——这些是调优模型的必备数学基础。
 
-## 2-3. 知识点与内容
+## 2. 知识点（Key Concepts）
+
+| 概念 | ML 应用 |
+|------|---------|
+| 偏导数 / 梯度 | 反向传播 |
+| 链式法则 | 自动微分 |
+| 梯度下降 | 模型训练 |
+| Adam 优化器 | 自适应学习率 |
+| 学习率调度 | Warmup + Cosine |
+
+## 3. 内容（Content）
+
+### 3.1 梯度与梯度下降
 
 ```python
 import numpy as np
 
-# 梯度下降直觉 / Gradient descent intuition
-# 想象站在山顶，闭眼找最低点：
-# 1. 感受脚下坡度（计算梯度）
-# 2. 沿着最陡方向走一小步（参数更新）
-# 3. 重复直到到达最低点
+# ============================================================
+# 梯度下降（一维）/ Gradient descent (1D)
+# ============================================================
+# 目标: 最小化 f(x) = x² + 2x + 1 = (x+1)²
+# 导数: f'(x) = 2x + 2
+# 最小值: x = -1
 
-# 一维梯度下降 / 1D gradient descent
-def f(x): return x**2 + 2*x + 1  # 最小值在 x=-1
-def df(x): return 2*x + 2         # 导数
+def f(x):
+    return x**2 + 2*x + 1
 
-x = 10.0  # 初始点
-lr = 0.1   # 学习率 (learning rate)
-for _ in range(100):
-    gradient = df(x)
-    x = x - lr * gradient  # 参数更新公式
-print(f"最小值点: x = {x:.4f}")  # ≈ -1.0
+def f_grad(x):
+    return 2*x + 2
 
-# 多维梯度下降（线性回归）/ Multi-dim gradient descent
-# 损失函数: L = (1/N) * Σ(y_pred - y_true)²
-# 梯度: dL/dw = (2/N) * X^T @ (X @ w - y)
+x = 5.0  # 初始值
+lr = 0.1
+for step in range(20):
+    grad = f_grad(x)
+    x = x - lr * grad  # 梯度下降更新
+    if step % 5 == 0:
+        print(f"Step {step}: x={x:.4f}, f(x)={f(x):.6f}")
+# x 逐渐收敛到 -1
 
-# 学习率调度 / Learning rate scheduling
-# - 固定学习率
-# - Warmup + Cosine Decay（大模型训练标配）
-# - 学习率预热：从 0 线性增大到目标 lr
-# - 余弦衰减：从目标 lr 按余弦函数衰减到 0
+# ============================================================
+# 梯度下降（多维）— 线性回归
+# ============================================================
+np.random.seed(42)
+X = np.random.randn(100, 1)
+y = 3 * X + 2 + np.random.randn(100, 1) * 0.5
+
+w, b = 0.0, 0.0
+lr = 0.01
+
+for epoch in range(100):
+    pred = w * X + b
+    loss = np.mean((pred - y) ** 2)  # MSE
+    dw = np.mean(2 * X * (pred - y))  # ∂L/∂w
+    db = np.mean(2 * (pred - y))       # ∂L/∂b
+    w -= lr * dw
+    b -= lr * db
+
+print(f"w={w:.2f}, b={b:.2f}")  # ≈ w=3.0, b=2.0
 ```
 
-## 4. 详细推理
+### 3.2 优化器
 
-**关键公式：** θ_new = θ_old - lr × ∇L(θ)
+```
+SGD:     w = w - lr × g
+Momentum: v = β×v + g; w = w - lr×v
+Adam:    m = β₁m + (1-β₁)g       (一阶矩)
+         v = β₂v + (1-β₂)g²      (二阶矩)
+         w = w - lr × m̂ / (√v̂ + ε)
 
-**优化器演进：** SGD → Momentum → RMSprop → Adam → AdamW
+Adam 为什么好:
+  - 自动调整每个参数的学习率
+  - 稀疏梯度也能快速收敛
+  - 大模型标配优化器
+```
 
-**对 Java 工程师：** 梯度下降类似于调优 JVM 参数——你有一个"损失"（延迟），通过调整参数找到最优配置。区别是梯度下降是自动化的。
+### 3.3 学习率调度
+
+```
+大模型常用调度策略:
+
+Warmup + Cosine Decay:
+  前 N 步: lr 从 0 线性增长到 max_lr（预热）
+  之后:    lr 按余弦曲线衰减到 min_lr
+
+为什么需要 Warmup?
+  训练初期梯度不稳定 → 大学习率容易发散
+  Warmup 让模型先"适应"数据
+```
+
+## 4. 详细推理（Deep Dive）
+
+```
+链式法则 = 反向传播的数学基础:
+
+y = f(g(h(x)))
+
+∂y/∂x = ∂f/∂g × ∂g/∂h × ∂h/∂x
+
+PyTorch autograd 自动计算这个链式:
+  loss.backward() → 自动对所有参数计算梯度
+```
 
 ## 5-6. 例题/习题
 
-**练习：** 纯 NumPy 实现线性回归的梯度下降训练，不使用任何 ML 库。
+**练习 1：** 手动实现梯度下降求解线性回归。
+
+**练习 2：** 对比 SGD 和 Adam 的收敛速度。
+
+**练习 3：** 实现 Warmup + Cosine Decay 学习率调度器。

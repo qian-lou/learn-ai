@@ -3,59 +3,93 @@
 
 ## 1. 背景（Background）
 
-> 广播（Broadcasting）是 NumPy/PyTorch 中最重要的概念之一——它允许不同形状的数组进行运算，无需手动扩展维度。大模型中的 Attention Score 计算、Mask 操作都依赖广播。
+> **为什么要学这个？**
+>
+> 广播（Broadcasting）是 NumPy/PyTorch 最重要的概念之一——它允许不同形状的数组进行运算，无需手动扩展维度。Attention Score 计算、Mask 操作、Batch Normalization 都依赖广播。不理解广播 = 无法理解大模型代码。
 
-## 2-3. 知识点与内容
+## 2. 知识点（Key Concepts）
+
+```
+广播三条规则（从右向左对齐）:
+
+1. 维度数不同 → 小数组在左侧补 1
+2. 维度大小相同 → 兼容
+3. 维度大小为 1 → 被"拉伸"到另一个的大小
+4. 维度大小不同且都不为 1 → ❌ Error!
+```
+
+## 3. 内容（Content）
 
 ```python
 import numpy as np
 
-# 标量广播 / Scalar broadcasting
+# ============================================================
+# 1. 标量广播 / Scalar broadcasting
+# ============================================================
 a = np.array([1, 2, 3])  # Shape: [3]
-print(a * 2)              # [2, 4, 6]  —— 2 被广播为 [2, 2, 2]
+print(a * 2)              # [2, 4, 6]  → 2 广播为 [2, 2, 2]
 
-# 不同形状的广播 / Different shape broadcasting
-# Shape: [3, 3] + Shape: [3] → 行向量被广播到每一行
+# ============================================================
+# 2. 行向量广播 / Row vector broadcasting
+# ============================================================
 matrix = np.ones((3, 3))   # Shape: [3, 3]
-row = np.array([1, 2, 3])  # Shape: [3]
+row = np.array([1, 2, 3])  # Shape: [3] → 视为 [1, 3] → 广播为 [3, 3]
 print(matrix + row)
 # [[2, 3, 4],
 #  [2, 3, 4],
 #  [2, 3, 4]]
 
-# 广播规则：
-# Broadcasting rules:
-# 1. 从右向左对齐维度
-# 2. 维度大小相同，或其中一个为 1，则兼容
-# 3. 大小为 1 的维度被"拉伸"
-
-# Shape: [4, 1] + Shape: [1, 3] → Shape: [4, 3]
+# ============================================================
+# 3. 外积效果 / Outer product effect
+# ============================================================
 a = np.arange(4).reshape(4, 1)  # Shape: [4, 1]
 b = np.arange(3).reshape(1, 3)  # Shape: [1, 3]
-print((a + b).shape)            # (4, 3) — 外积效果
+print((a + b).shape)            # (4, 3)
+# [[0,1,2], [1,2,3], [2,3,4], [3,4,5]]
+
+# ============================================================
+# 4. 实际应用：行均值标准化
+# ============================================================
+data = np.random.randn(100, 50)  # Shape: [100, 50]
+mean = data.mean(axis=1, keepdims=True)  # Shape: [100, 1]
+std = data.std(axis=1, keepdims=True)    # Shape: [100, 1]
+normalized = (data - mean) / std  # 广播: [100, 50] - [100, 1]
+
+# ============================================================
+# 5. Attention Mask 广播
+# ============================================================
+# mask: Shape [B, 1, 1, S]  广播到 [B, H, S, S]
+# scores: Shape [B, H, S, S]
+# scores = scores + mask  ← 广播！
 ```
 
 ## 4. 详细推理（Deep Dive）
 
 ```
 广播规则图示：
-Shape [4, 1] + Shape [1, 3]      
-         ↓              ↓
-Shape [4, 3] + Shape [4, 3]  ← 两个维度都被拉伸
-         ↓
-    Shape [4, 3]  ← 结果
 
-不兼容的例子：
-Shape [3] + Shape [4] → ❌ Error!（维度不匹配且都不是1）
+Shape [4, 1] + Shape [1, 3]
+  Step 1: 维度对齐 → [4, 1] vs [1, 3]
+  Step 2: 1 被拉伸 → [4, 3] vs [4, 3]
+  Step 3: 逐元素运算 → Shape [4, 3]
+
+Shape [3, 4, 1] + Shape [4, 5]
+  Step 1: 补维度 → [3, 4, 1] vs [1, 4, 5]
+  Step 2: 拉伸   → [3, 4, 5] vs [3, 4, 5]
+  Step 3: 结果   → Shape [3, 4, 5]
+
+❌ 不兼容: Shape [3] + Shape [4] → Error!
+❌ 不兼容: Shape [2, 3] + Shape [3, 2] → Error!
+
+keepdims=True 的作用:
+  mean(axis=1):              Shape [100] → 无法与 [100, 50] 广播
+  mean(axis=1, keepdims=True): Shape [100, 1] → 可以广播！
 ```
 
 ## 5-6. 例题/习题
 
-**练习：** 用广播实现矩阵每行减去行均值（标准化），不使用 for 循环。
+**练习 1：** 用广播计算距离矩阵：`points: [N, 2]` 的所有点对欧氏距离。
 
-```python
-# 参考答案
-# Time: O(M*N)  Space: O(M)
-matrix = np.random.randn(100, 50)
-normalized = matrix - matrix.mean(axis=1, keepdims=True)
-```
+**练习 2：** 用广播实现 Softmax：`exp(x - max) / sum(exp(x - max))`。
+
+**练习 3：** 判断以下广播是否合法：`[3,1,5] + [1,4,5]`，`[2,3] + [3]`，`[4] + [5]`。

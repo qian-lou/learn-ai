@@ -1,59 +1,108 @@
-# 线性代数（矩阵/向量/特征值）
-# Linear Algebra (Matrix/Vector/Eigenvalue)
+# 线性代数基础
+# Linear Algebra Foundations
 
 ## 1. 背景（Background）
 
-> 线性代数是机器学习和深度学习的数学基础。Transformer 中的注意力机制本质上就是矩阵乘法。理解线性代数才能理解模型为什么这样计算。
+> **为什么要学这个？**
+>
+> 线性代数是深度学习的**数学语言**。矩阵乘法驱动 Transformer 的每一次前向传播，特征分解是 PCA 的基础，SVD 是 LoRA 的理论依据。不懂线性代数就无法真正理解深度学习。
 
 ## 2. 知识点（Key Concepts）
 
-- **向量**：特征的数学表示。一个词嵌入就是一个 768 维向量
-- **矩阵**：线性变换的表示。全连接层就是矩阵乘法 `y = Wx + b`
-- **特征值/特征向量**：PCA 降维的理论基础
-- **矩阵分解**：SVD 是 LoRA 微调的理论基础
+| 概念 | 深度学习应用 |
+|------|-------------|
+| 矩阵乘法 | 全连接层, Attention |
+| 特征值/特征向量 | PCA, 谱聚类 |
+| SVD | LoRA, 降维 |
+| 范数 | 正则化, 梯度裁剪 |
+| 正交矩阵 | 权重初始化 |
 
 ## 3. 内容（Content）
+
+### 3.1 向量与矩阵
 
 ```python
 import numpy as np
 
+# ============================================================
 # 向量运算 / Vector operations
-v1 = np.array([1, 2, 3])  # Shape: [3]
-v2 = np.array([4, 5, 6])
+# ============================================================
+a = np.array([1, 2, 3])
+b = np.array([4, 5, 6])
 
-dot_product = np.dot(v1, v2)       # 点积: 32
-cross = np.cross(v1, v2)            # 叉积
-norm = np.linalg.norm(v1)           # L2 范数: sqrt(14)
+# 点积（内积）— 衡量相似度
+dot = np.dot(a, b)  # 1×4 + 2×5 + 3×6 = 32
 
-# 余弦相似度（NLP 中衡量文本相似度）
-# Cosine similarity (measuring text similarity in NLP)
-cos_sim = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+# 余弦相似度 — Embedding 相似度的基础
+cosine_sim = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
+# ============================================================
 # 矩阵运算 / Matrix operations
-W = np.random.randn(768, 3072)  # 全连接层权重 Shape: [768, 3072]
-x = np.random.randn(768)         # 输入向量 Shape: [768]
-y = W.T @ x                      # 线性变换 Shape: [3072]
+# ============================================================
+A = np.array([[1, 2], [3, 4]])
+B = np.array([[5, 6], [7, 8]])
 
+# 矩阵乘法 — 神经网络的核心运算
+C = A @ B  # Shape: [2,2] @ [2,2] → [2,2]
+# 含义: 线性变换（旋转 + 缩放）
+
+# 转置
+print(A.T)
+
+# 逆矩阵
+A_inv = np.linalg.inv(A)
+
+# 行列式（衡量矩阵"缩放程度"）
+det = np.linalg.det(A)
+```
+
+### 3.2 特征值与 SVD
+
+```python
+# ============================================================
 # 特征值分解 / Eigendecomposition
-A = np.array([[2, 1], [1, 3]])
+# A·v = λ·v (v 是特征向量, λ 是特征值)
+# ============================================================
 eigenvalues, eigenvectors = np.linalg.eig(A)
+# PCA 的核心: 协方差矩阵的特征向量 = 主成分方向
 
-# SVD 分解（LoRA 基础）/ SVD decomposition (basis for LoRA)
-U, S, Vt = np.linalg.svd(W, full_matrices=False)
-# 低秩近似：只保留前 r 个奇异值
-r = 16  # LoRA 的典型 rank
-W_approx = U[:, :r] @ np.diag(S[:r]) @ Vt[:r, :]
+# ============================================================
+# SVD 奇异值分解 / Singular Value Decomposition
+# A = U·Σ·V^T
+# ============================================================
+U, S, Vt = np.linalg.svd(A)
+# LoRA: 权重矩阵是低秩的 → 只需用 r 个最大奇异值近似
+```
+
+### 3.3 范数
+
+```python
+v = np.array([3.0, 4.0])
+
+# L1 范数（曼哈顿距离）— L1 正则化
+l1 = np.linalg.norm(v, ord=1)  # 7.0
+
+# L2 范数（欧氏距离）— L2 正则化, 梯度裁剪
+l2 = np.linalg.norm(v, ord=2)  # 5.0
+
+# Frobenius 范数（矩阵的 L2）
+fro = np.linalg.norm(A, 'fro')
 ```
 
 ## 4. 详细推理（Deep Dive）
 
-大模型中的线性代数无处不在：
-- **Embedding 层**：查表 = 矩阵的行选择
-- **Attention**：QK^T 是矩阵乘法，Softmax(QK^T/√d)V 也是
-- **FFN 层**：两个矩阵乘法
-- **LoRA**：W' = W + BA，其中 B∈R^{d×r}, A∈R^{r×k}, r << d
+```
+深度学习中的线性代数:
+
+全连接层: y = Wx + b  (矩阵乘法)
+Attention: softmax(QK^T/√d)V  (三次矩阵乘法)
+BatchNorm: (x - μ) / σ  (向量运算)
+梯度裁剪: if ||g|| > max_norm: g *= max_norm / ||g||  (范数)
+LoRA: ΔW = BA, rank(BA) = r << d  (低秩分解)
+```
 
 ## 5-6. 例题/习题
 
-**练习 1：** 手算 2×2 矩阵的特征值和特征向量。
-**练习 2：** 用 SVD 实现图像压缩（保留前 k 个奇异值）。
+**练习 1：** 用 NumPy 实现 PCA 降维（基于协方差矩阵特征分解）。
+
+**练习 2：** 验证 SVD 低秩近似：对图像矩阵做 SVD，只保留前 k 个奇异值重建，观察图像质量。

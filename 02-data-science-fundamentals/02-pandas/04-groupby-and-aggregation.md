@@ -1,39 +1,99 @@
-# 分组与聚合（SQL 对比）
-# GroupBy and Aggregation (vs SQL)
+# 分组与聚合
+# GroupBy and Aggregation
 
 ## 1. 背景（Background）
 
-> Pandas 的 `groupby` 等价于 SQL 的 `GROUP BY`。Java 工程师可以类比为 Stream 的 `Collectors.groupingBy`。
+> **为什么要学这个？**
+>
+> GroupBy 是 Pandas 最强大的功能之一，等价于 SQL 的 `GROUP BY`。在模型评估中，按类别/数据集/模型分组统计指标是常规操作。
 
-## 2-3. 知识点与内容
+## 2. 知识点（Key Concepts）
+
+| Pandas | SQL | 说明 |
+|--------|-----|------|
+| `groupby("col")` | `GROUP BY col` | 分组 |
+| `.agg()` | 聚合函数 | 多种聚合 |
+| `.transform()` | 窗口函数 | 组内变换 |
+| `.apply()` | - | 自定义操作 |
+
+## 3. 内容（Content）
 
 ```python
 import pandas as pd
+import numpy as np
 
 df = pd.DataFrame({
-    "dept": ["AI", "AI", "Backend", "Backend", "AI"],
-    "name": ["Alice", "Bob", "Charlie", "David", "Eve"],
-    "salary": [100, 120, 80, 90, 110],
+    "model": ["BERT", "GPT", "BERT", "GPT", "T5", "T5"],
+    "dataset": ["IMDB", "IMDB", "SST", "SST", "IMDB", "SST"],
+    "accuracy": [0.92, 0.89, 0.91, 0.93, 0.90, 0.88],
+    "latency_ms": [15, 45, 14, 42, 20, 18],
 })
 
-# SQL: SELECT dept, AVG(salary) FROM df GROUP BY dept
-result = df.groupby("dept")["salary"].mean()
+# ============================================================
+# 基础分组 / Basic groupby
+# ============================================================
+# 按模型分组，计算平均准确率
+print(df.groupby("model")["accuracy"].mean())
+# BERT    0.915
+# GPT     0.910
+# T5      0.890
 
-# 多个聚合函数 / Multiple aggregations
-# SQL: SELECT dept, COUNT(*), AVG(salary), MAX(salary) FROM df GROUP BY dept
-result = df.groupby("dept")["salary"].agg(["count", "mean", "max"])
+# ============================================================
+# 多重聚合 / Multiple aggregations
+# ============================================================
+result = df.groupby("model").agg(
+    avg_accuracy=("accuracy", "mean"),
+    max_accuracy=("accuracy", "max"),
+    avg_latency=("latency_ms", "mean"),
+    count=("accuracy", "count"),
+)
+print(result)
 
-# 自定义聚合 / Custom aggregation
-result = df.groupby("dept").agg(
-    headcount=("name", "count"),
-    avg_salary=("salary", "mean"),
-    top_earner=("salary", "max"),
+# ============================================================
+# 多列分组 / Multi-column groupby
+# ============================================================
+pivot = df.groupby(["model", "dataset"])["accuracy"].mean().unstack()
+print(pivot)  # 交叉表格
+
+# ============================================================
+# Transform（组内变换，保持原始形状）
+# ============================================================
+df["accuracy_zscore"] = df.groupby("model")["accuracy"].transform(
+    lambda x: (x - x.mean()) / x.std()
 )
 
-# 转换（对每个组内应用变换）/ Transform
-df["salary_rank"] = df.groupby("dept")["salary"].rank(ascending=False)
+# ============================================================
+# 自定义聚合 / Custom aggregation
+# ============================================================
+def accuracy_range(series):
+    return series.max() - series.min()
+
+print(df.groupby("model")["accuracy"].agg(accuracy_range))
 ```
 
-## 4-6. 推理/例题/习题
+## 4. 详细推理（Deep Dive）
 
-**练习：** 给定一个 NLP 数据集（含 text 和 label 列），统计每个 label 的样本数和平均文本长度。
+```
+GroupBy 三步流程（Split-Apply-Combine）:
+  1. Split: 按列值分组
+  2. Apply: 对每组应用函数
+  3. Combine: 合并结果
+
+等价 SQL:
+  SELECT model, AVG(accuracy), MAX(accuracy)
+  FROM results
+  GROUP BY model
+  HAVING AVG(accuracy) > 0.9
+  ORDER BY AVG(accuracy) DESC
+
+→ Pandas:
+  df.groupby("model").agg(...)
+    .query("avg_accuracy > 0.9")
+    .sort_values("avg_accuracy", ascending=False)
+```
+
+## 5-6. 例题/习题
+
+**练习 1：** 按模型和数据集分组，统计准确率均值和标准差。
+
+**练习 2：** 实现一个模型评估报告：按模型分组展示所有指标的均值和排名。

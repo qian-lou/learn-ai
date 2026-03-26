@@ -3,42 +3,100 @@
 
 ## 1. 背景（Background）
 
-> Seaborn 基于 Matplotlib，提供更美观的统计图表和更简洁的 API。EDA（探索性数据分析）阶段的标配。
+> **为什么要学这个？**
+>
+> Seaborn 建立在 Matplotlib 基础上，提供更美观的统计图表。混淆矩阵热力图、特征相关性矩阵、箱线图等在模型评估中非常常用。
 
-## 2-3. 知识点与内容
+## 2. 知识点（Key Concepts）
+
+| 图表 | API | ML 应用 |
+|------|-----|---------|
+| 热力图 | `sns.heatmap()` | 混淆矩阵、相关性 |
+| 箱线图 | `sns.boxplot()` | 分布对比 |
+| 小提琴图 | `sns.violinplot()` | 密度分布 |
+| 成对图 | `sns.pairplot()` | 特征关系 |
+| 类别图 | `sns.catplot()` | 分类统计 |
+
+## 3. 内容（Content）
 
 ```python
 import seaborn as sns
-import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
-# 设置主题 / Set theme
-sns.set_theme(style="whitegrid", palette="husl")
+sns.set_theme(style="whitegrid")
 
-# 查看内置数据集
-tips = sns.load_dataset("tips")
+# ============================================================
+# 1. 混淆矩阵热力图 / Confusion matrix heatmap
+# ============================================================
+confusion = np.array([[85, 10, 5], [8, 82, 10], [3, 12, 85]])
+labels = ["Positive", "Negative", "Neutral"]
 
-# 分布图 / Distribution plot
-sns.histplot(data=tips, x="total_bill", hue="time", kde=True)
-
-# 箱线图 / Box plot
-sns.boxplot(data=tips, x="day", y="total_bill", hue="smoker")
-
-# 热力图（相关性矩阵）/ Heatmap (correlation matrix)
-corr = tips.select_dtypes(include='number').corr()
-sns.heatmap(corr, annot=True, cmap="coolwarm", center=0)
-
-# 配对图 / Pair plot
-sns.pairplot(tips, hue="time", diag_kind="kde")
-
-# 混淆矩阵可视化（分类模型评估必备）
-# Confusion matrix visualization
-confusion = [[85, 15], [10, 90]]
+plt.figure(figsize=(8, 6))
 sns.heatmap(confusion, annot=True, fmt="d", cmap="Blues",
-            xticklabels=["Pred 0", "Pred 1"],
-            yticklabels=["True 0", "True 1"])
+            xticklabels=labels, yticklabels=labels)
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Confusion Matrix")
+plt.show()
+
+# ============================================================
+# 2. 特征相关性热力图 / Feature correlation heatmap
+# ============================================================
+df = pd.DataFrame(np.random.randn(100, 5), columns=["F1", "F2", "F3", "F4", "F5"])
+df["F2"] = df["F1"] * 0.8 + np.random.randn(100) * 0.2  # 人造相关
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(df.corr(), annot=True, cmap="RdBu_r", vmin=-1, vmax=1, center=0)
+plt.title("Feature Correlation Matrix")
+plt.show()
+
+# ============================================================
+# 3. 分布对比 / Distribution comparison
+# ============================================================
+results = pd.DataFrame({
+    "model": ["BERT"] * 50 + ["GPT"] * 50 + ["T5"] * 50,
+    "accuracy": np.concatenate([
+        np.random.normal(0.92, 0.02, 50),
+        np.random.normal(0.89, 0.03, 50),
+        np.random.normal(0.90, 0.025, 50),
+    ])
+})
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+sns.boxplot(data=results, x="model", y="accuracy", ax=axes[0])
+axes[0].set_title("Box Plot")
+sns.violinplot(data=results, x="model", y="accuracy", ax=axes[1])
+axes[1].set_title("Violin Plot")
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# 4. 成对关系图 / Pair plot
+# ============================================================
+# sns.pairplot(df, diag_kind="kde", corner=True)
+# plt.show()
 ```
 
-## 4-6. 推理/例题/习题
+## 4. 详细推理（Deep Dive）
 
-**练习：** 用 Seaborn 可视化一个分类数据集的特征分布和类别平衡情况。
+```
+Seaborn vs Matplotlib:
+  Matplotlib: 底层灵活，但需要手动配置很多
+  Seaborn: 统计图表开箱即用，默认就很美观
+
+ML 常用可视化:
+  训练过程: 损失/准确率曲线 (Matplotlib)
+  模型评估: 混淆矩阵/ROC 曲线 (Seaborn)
+  数据探索: 分布图/相关性矩阵 (Seaborn)
+  注意力可视化: 热力图 (Matplotlib/Seaborn)
+```
+
+## 5-6. 例题/习题
+
+**练习 1：** 绘制分类模型的混淆矩阵热力图。
+
+**练习 2：** 用小提琴图对比 3 个模型在 5 个数据集上的性能分布。
+
+**练习 3：** 绘制 Attention Weight 热力图（假设 attention 矩阵为 `[seq_len, seq_len]`）。

@@ -51,8 +51,7 @@ CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "800
 ### 3.2 Docker Compose
 
 ```yaml
-# docker-compose.yml
-version: "3.8"
+# docker-compose.yml（Compose Spec 已不需要 version 字段）
 services:
   llm-api:
     build: .
@@ -129,10 +128,74 @@ server {
 4. 多阶段构建减小镜像
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用 Docker Compose 部署 vLLM + Nginx。
+### 例题 1：编写面向生产环境的大模型 API 容器化多阶段 Dockerfile / Multi-stage Dockerfile
 
-**练习 2：** 实现多 GPU 部署（tensor parallel）。
+为了最小化发布体积，我们通常使用多阶段构建（Multi-stage Build）。以下例题演示如何打包运行 FastAPI 大模型推理服务器。
 
-**练习 3：** 添加 Prometheus metrics 收集和 Grafana 监控面板。
+```dockerfile
+# ============================================================
+# 阶段 1: 构建依赖环境 / Stage 1: Build dependencies
+# ============================================================
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# 安装必要的编译工具 / Install build tools
+RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+# 将 Python 包安装到本地隔离路径以防止环境冲突 / Install deps locally
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# ============================================================
+# 阶段 2: 运行环境 / Stage 2: Final runtime
+# ============================================================
+FROM python:3.11-slim AS runner
+
+WORKDIR /app
+
+# 拷贝阶段 1 中安装完的 python packages / Copy packages
+COPY --from=builder /root/.local /root/.local
+COPY . .
+
+ENV PATH=/root/.local/bin:$PATH
+
+EXPOSE 8000
+
+# 使用 uvicorn 运行大模型服务 / Start server
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：大模型镜像体积通常极大（十几GB以上），在编写 `.dockerignore` 时，我们必须忽略哪些目录以防止将本地庞大的模型权重文件打包进镜像层中？
+*参考答案*：
+应该在 `.dockerignore` 中写入所有的本地模型缓存和日志目录，如：
+```
+.git
+.cache/
+huggingface_hub/
+weights/
+*.bin
+*.safetensors
+```
+
+### 进阶题
+**练习 2**：在运行基于 GPU 推理容器（如 vLLM）时，如何通过 Docker Compose 启动容器并声明申请宿主机上的所有 GPU 显卡卡槽？
+*参考答案*：
+必须在 Docker Compose 文件的服务下添加 `deploy.resources.reservations.devices` 节点：
+```yaml
+services:    # Compose Spec 已不需要 version 字段
+  llm-service:
+    image: vllm/vllm-openai:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+```\n

@@ -101,8 +101,62 @@ BatchNorm: (x - μ) / σ  (向量运算)
 LoRA: ΔW = BA, rank(BA) = r << d  (低秩分解)
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用 NumPy 实现 PCA 降维（基于协方差矩阵特征分解）。
+### 例题 1：奇异值分解 (SVD) 降低图片特征维度 / SVD for feature dimension reduction
 
-**练习 2：** 验证 SVD 低秩近似：对图像矩阵做 SVD，只保留前 k 个奇异值重建，观察图像质量。
+奇异值分解 (SVD) 是很多降维算法（如 PCA）的核心。本例题演示如何用 NumPy 对特征矩阵进行 SVD 分解，并保留前 K 个奇异值对原矩阵进行近似重构。
+
+```python
+import numpy as np
+
+# 模拟 100x64 的数据特征矩阵 / Simulate a 100x64 feature matrix
+X = np.random.randn(100, 64)  # Shape: [100, 64]
+
+# 1. 执行 SVD 分解 / Perform SVD
+# Time: O(M * N * min(M,N)), Space: O(M * N)
+U, S, Vt = np.linalg.svd(X, full_matrices=False)
+# U Shape: [100, 64], S Shape: [64], Vt Shape: [64, 64]
+
+# 2. 近似重构 (仅保留前 K 个最大的奇异值) / Low-rank approximation (keep top K singular values)
+K = 10
+# S 是对角矩阵的向量，我们需要切片 / Slice top K elements
+S_k = np.diag(S[:K])  # Shape: [10, 10]
+U_k = U[:, :K]        # Shape: [100, 10]
+Vt_k = Vt[:K, :]      # Shape: [10, 64]
+
+# 重构特征 / Reconstruct matrix
+# Time: O(M * K * N), Space: O(M * N)
+X_reconstructed = np.dot(U_k, np.dot(S_k, Vt_k))
+
+print(f"原始矩阵二范数 / Original Norm: {np.linalg.norm(X):.4f}")
+print(f"保留 10 个奇异值后的重构二范数 / Reconstructed Norm (K=10): {np.linalg.norm(X_reconstructed):.4f}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：使用 NumPy 计算矩阵的迹（对角线元素之和）和行列式。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(N^3) for det, Space: O(N^2)
+A = np.array([[4, 2], [3, 1]])
+print(f"迹 / Trace: {np.trace(A)}")
+print(f"行列式 / Det: {np.linalg.det(A):.4f}")
+```
+
+### 进阶题
+**练习 2**：推导在线性回归中，设计矩阵为 $X \in \mathbb{R}^{N \times D}$ 时，解析解（最小二乘解）的公式：$\theta = (X^T X)^{-1} X^T y$。在 $X^T X$ 不满秩时，如何使用伪逆（Moore-Penrose Pseudoinverse）解决求解问题？请编写 NumPy 代码验证。
+*参考答案*：
+当 $X^T X$ 不可逆（不满秩）时，无法直接求逆，我们需要使用 `np.linalg.pinv` 计算伪逆。
+```python
+import numpy as np
+# Time: O(D^3), Space: O(N * D)
+X = np.random.randn(5, 5)
+X[:, 4] = X[:, 3] * 2  # 创造线性相关列（X[:,4]=2·X[:,3]）使之不满秩 / dependent column
+y = np.random.randn(5)
+# 计算伪逆解析解
+theta = np.dot(np.linalg.pinv(X), y)
+print(f"系数权重 theta: {theta}")
+```

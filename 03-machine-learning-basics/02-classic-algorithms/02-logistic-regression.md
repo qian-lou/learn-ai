@@ -52,7 +52,7 @@ print(classification_report(y_test, y_pred))
 # ============================================================
 from sklearn.datasets import load_iris
 iris = load_iris()
-model_multi = LogisticRegression(multi_class='multinomial', max_iter=1000)
+model_multi = LogisticRegression(max_iter=1000)  # sklearn 1.5+ 默认即 multinomial，multi_class 参数已废弃
 model_multi.fit(iris.data, iris.target)
 print(f"Iris Accuracy: {model_multi.score(iris.data, iris.target):.4f}")
 ```
@@ -70,8 +70,59 @@ BERT/GPT 分类头:
   本质就是一个逻辑回归层！
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 手动实现逻辑回归（sigmoid + 交叉熵 + 梯度下降）。
+### 例题 1：利用逻辑回归实现二分类任务并输出性能指标 / Logistic Regression Binary Classification
 
-**练习 2：** 用逻辑回归做文本分类（TF-IDF 特征 + 情感分类）。
+逻辑回归广泛用于点击率预估。本例训练模型并计算混淆矩阵、AUC 曲线下面积。
+
+```python
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, roc_auc_score
+
+# 1. 制造分类数据集 / Generate dataset
+# Time: O(N * D), Space: O(N * D)
+X, y = make_classification(n_samples=500, n_features=10, n_informative=8, random_state=42)
+
+# 2. 训练逻辑回归模型 / Train Logistic Regression
+# Time: O(Iterations * N * D), Space: O(D)
+clf = LogisticRegression()
+clf.fit(X, y)
+
+# 3. 概率预测与指标计算 / Prediction and validation
+preds = clf.predict(X)
+probs = clf.predict_proba(X)[:, 1]  # 获取正例概率 / Probability of positive class.
+
+print("分类指标分析报告 / Classification Report:")
+print(classification_report(y, preds))
+print(f"ROC-AUC 指标 / ROC-AUC Score: {roc_auc_score(y, probs):.4f}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：写出逻辑回归模型使用的 Sigmoid 函数数学公式，并说明为什么它能将数值映射到 `(0, 1)` 区间。
+*参考答案*：
+$\sigma(z) = rac{1}{1 + e^{-z}}$
+当 $z 	o \infty$ 时，$e^{-z} 	o 0$，$\sigma(z) 	o 1$；当 $z 	o -\infty$ 时，$e^{-z} 	o \infty$，$\sigma(z) 	o 0$。因此输出天然限制在 `(0, 1)` 区间，适合表示概率。
+
+### 进阶题
+**练习 2**：从零编写 Python 函数，实现逻辑回归中的交叉熵损失函数（Binary Cross Entropy Loss）计算，并且要考虑边界情况（概率接近 0 或 1 时 `log` 的数值溢出问题）。
+*参考答案*：
+```python
+import numpy as np
+
+def binary_cross_entropy(y_true: np.ndarray, y_pred_prob: np.ndarray) -> float:
+    """Time: O(N), Space: O(1)"""
+    # 使用 np.clip 截断，防止 log(0) 产生 NaN / Avoid overflow
+    epsilon = 1e-15
+    y_pred_prob = np.clip(y_pred_prob, epsilon, 1 - epsilon)
+    loss = -np.mean(y_true * np.log(y_pred_prob) + (1 - y_true) * np.log(1 - y_pred_prob))
+    return float(loss)
+
+y_true = np.array([1, 0, 1, 0])
+y_prob = np.array([0.95, 0.05, 0.99, 0.01])
+print(f"交叉熵损失: {binary_cross_entropy(y_true, y_prob):.6f}")
+```\n

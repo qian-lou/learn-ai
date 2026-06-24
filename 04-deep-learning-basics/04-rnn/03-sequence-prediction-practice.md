@@ -193,9 +193,17 @@ def generate(model, start_text, length, strategy='top_k',
     device = next(model.parameters()).device
     
     tokens = [c2i[ch] for ch in start_text]
-    input_seq = torch.tensor([tokens[-1]], device=device).unsqueeze(0)
     hidden = model.init_hidden(1, device)
-    
+
+    # 用整段前缀预热隐状态（除最后一个 token 外全部喂入），否则会丢失上下文
+    # Warm up hidden state with the full prefix (feed all but the last token)
+    if len(tokens) > 1:
+        warmup = torch.tensor([tokens[:-1]], device=device)  # Shape: [1, L-1]
+        _, hidden = model(warmup, hidden)
+
+    # 从前缀的最后一个 token 开始自回归生成 / Start generation from the last token
+    input_seq = torch.tensor([[tokens[-1]]], device=device)  # Shape: [1, 1]
+
     generated = list(start_text)
     
     for _ in range(length):

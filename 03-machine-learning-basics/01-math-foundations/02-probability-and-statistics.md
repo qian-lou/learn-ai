@@ -31,7 +31,7 @@ import numpy as np
 uniform = np.random.uniform(0, 1, size=1000)
 
 # 正态分布（权重初始化常用）
-normal = np.random.normal(mean=0, std=0.02, size=1000)
+normal = np.random.normal(loc=0.0, scale=0.02, size=1000)  # loc=均值 mean, scale=标准差 std
 
 # 伯努利分布（Dropout）
 dropout_mask = np.random.binomial(1, p=0.9, size=(768,))  # 90% 保留
@@ -85,7 +85,9 @@ print(f"差预测 CE: {cross_entropy(true, pred_bad):.4f}")    # 0.9163
 # KL(p||q) = Σ p(x) log(p(x)/q(x))
 # ============================================================
 def kl_divergence(p, q):
-    return np.sum(p * np.log(p / (q + 1e-10) + 1e-10))
+    # 数值稳定：分子分母同加 epsilon 防止 log(0) 与除零
+    # Numerical stability: add epsilon to both numerator & denominator
+    return np.sum(p * np.log((p + 1e-10) / (q + 1e-10)))
 ```
 
 ## 4. 详细推理（Deep Dive）
@@ -101,8 +103,74 @@ CE = -log(p_correct)
 本质：最小化交叉熵 = 最大化正确类别的概率 = 最大似然估计
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 实现 Softmax + 交叉熵损失（注意数值稳定性）。
+### 例题 1：朴素贝叶斯分类器的概率推导与计算 / Naive Bayes Probability Derivation
 
-**练习 2：** 计算两个概率分布的 KL 散度，验证 KL(p||q) ≠ KL(q||p)。
+在垃圾邮件分类中，我们需要计算 $P(	ext{Spam} \mid 	ext{Words}) \propto P(	ext{Spam}) \prod P(	ext{Word}_i \mid 	ext{Spam})$。本例题演示如何计算这个条件概率。
+
+```python
+import numpy as np
+
+# 假设先验概率 / Prior probabilities
+p_spam = 0.4
+p_ham = 0.6
+
+# 两个单词在垃圾/正常邮件中出现的似然概率 / Likelihoods of words
+# Word 1: 'money', Word 2: 'meeting'
+# Shape: [2, 2] -> [Spam/Ham, Word1/Word2]
+p_word_given_class = np.array([
+    [0.8, 0.1],  # Spam: P('money'|Spam)=0.8, P('meeting'|Spam)=0.1
+    [0.05, 0.7]  # Ham:  P('money'|Ham)=0.05, P('meeting'|Ham)=0.7
+])
+
+# 测试样本含有 'money' 但不含 'meeting' / Test sample: contains 'money', no 'meeting'
+# 计算非归一化后验概率 / Compute unnormalized posteriors
+# Time: O(W), Space: O(1)
+post_spam = p_spam * p_word_given_class[0, 0] * (1 - p_word_given_class[0, 1])
+post_ham = p_ham * p_word_given_class[1, 0] * (1 - p_word_given_class[1, 1])
+
+# 归一化 / Normalize
+total = post_spam + post_ham
+prob_spam = post_spam / total
+
+print(f"该邮件属于垃圾邮件的概率 / Prob(Spam | money, not meeting): {prob_spam:.4f}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：编写代码，计算一组观测数据的样本均值、样本标准差及偏度（Skewness）。
+*参考答案*：
+```python
+import numpy as np
+from scipy.stats import skew
+# Time: O(N), Space: O(1)
+data = np.array([1, 2, 2, 3, 4, 5, 10])  # 右偏数据
+print(f"均值: {np.mean(data)}")
+print(f"标准差: {np.std(data)}")
+print(f"偏度: {skew(data)}")
+```
+
+### 进阶题
+**练习 2**：在大模型（如 GPT）生成文本采样中，我们需要理解 Softmax 与温度（Temperature）的影响。给定对数概率向量 `logits`，利用不同的 Temperature 参数对其进行缩放，并计算对应的概率分布。分析 $T 	o 0$ 和 $T 	o \infty$ 时的概率特征。
+*参考答案*：
+```python
+import numpy as np
+
+def softmax(logits: np.ndarray, temp: float) -> np.ndarray:
+    """带温度的 Softmax / Softmax with temperature.
+    
+    Time: O(K), Space: O(K)
+    """
+    scaled = logits / temp
+    # 防止溢出的指数变换 / Stabilize exponents.
+    e_x = np.exp(scaled - np.max(scaled))
+    return e_x / e_x.sum()
+
+logits = np.array([2.0, 1.0, 0.1])
+print(f"T=0.5 (确定性倾向): {softmax(logits, 0.5)}")
+print(f"T=1.0 (常规采样):   {softmax(logits, 1.0)}")
+print(f"T=2.0 (随机性倾向): {softmax(logits, 2.0)}")
+# 结论：T 越小概率越向最大值集聚，T 趋近于 0 变为 one-hot；T 越大概率分布越平缓，趋近于均匀分布。
+```\n

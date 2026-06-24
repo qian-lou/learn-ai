@@ -143,7 +143,7 @@ Pipeline Parallel（流水线并行）:
 
   参数 (FP16):       14 GB  (7B × 2 bytes)
   梯度 (FP16):       14 GB
-  优化器 (FP32):     56 GB  (Adam: 参数 + 一阶动量 + 二阶动量 = 4×)
+  优化器 (FP32):     56 GB  (Adam 一阶动量 m + 二阶动量 v：7B × 4B × 2)
   激活值:           ~20 GB  (取决于 batch size 和序列长度)
   ─────────────────────────
   总计:             ~104 GB → 需要至少 2 张 A100-80GB
@@ -197,10 +197,82 @@ for step, batch in enumerate(dataloader):
 
 **练习 1：** 用 `torchrun` 在单机多卡上运行一个 DDP 训练。
 
+*参考答案*：直接复用 3.1 的 `train_ddp` 函数，关键是用 `torchrun` 启动、并从环境变量读取 `rank/world_size`。
+
+```python
+import os, torch, torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+def main():
+    dist.init_process_group("nccl")               # torchrun 自动注入 RANK/WORLD_SIZE
+    rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(rank)
+    model = DDP(MyModel().to(rank), device_ids=[rank])
+    sampler = torch.utils.data.distributed.DistributedSampler(dataset)  # 自动分片
+    # ... 训练循环（每 epoch 调 sampler.set_epoch(epoch)）...
+    dist.destroy_process_group()
+
+if __name__ == "__main__":
+    main()
+# 启动: torchrun --standalone --nproc_per_node=4 train.py
+```
+要点：`--nproc_per_node` = 本机 GPU 数；`DistributedSampler` 保证各卡拿到不重叠数据；DDP 在 `backward` 时自动 All-Reduce 平均梯度，因此各卡参数始终一致。
+
 **练习 2：** 计算训练 LLaMA-70B 模型需要多少张 A100-80GB（用 FSDP）。
+
+*参考答案*：按正文 3.4 的显存模型，先算 70B 的"静态"显存（混合精度 + Adam）：
+
+```
+参数(FP16):    70B × 2  = 140 GB
+梯度(FP16):    70B × 2  = 140 GB
+优化器(FP32):  70B × 4 × 2(Adam 的 m+v) = 560 GB
+静态合计 ≈ 840 GB（不含激活值）
+```
+FSDP(ZeRO-3) 把这三部分**均分**到 N 张卡，每卡静态 ≈ `840/N` GB，还要给激活值 + All-Gather 临时全量参数 + 通信缓冲留出余量（A100-80GB 实际可用约 70–75GB）。
+- 仅塞下静态：`840/N ≤ ~50GB` ⇒ **N ≥ 约 17 张**，即 ≥ 2 个 8 卡节点。
+- 留足激活/缓冲做实际训练：通常需 **约 32 张（4 节点）** 才宽裕；若开梯度检查点、加大序列长度则更多。
+结论量级：**32 张 A100-80GB 左右**起步（粗算，随 batch/序列长度/是否梯度检查点浮动）。若改用 8-bit 优化器或更激进的 offload，可进一步减少卡数。
 
 ### 进阶题
 
 **练习 3：** 用 FSDP 训练一个 1B 参数的模型，对比 DDP 和 FSDP 的显存占用。
 
+*参考答案*：同一模型分别用 DDP 和 FSDP 包裹，用 `torch.cuda.max_memory_allocated()` 测每卡峰值显存。
+
+```python
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
+# 二选一:
+# model = DDP(model.cuda(), device_ids=[rank])                    # 每卡存完整副本
+model = FSDP(model.cuda(), auto_wrap_policy=size_based_auto_wrap_policy)  # 切片
+# 训练若干步后:
+print(f"peak mem = {torch.cuda.max_memory_allocated()/1e9:.1f} GB")
+```
+预期（4 卡，1B 模型，理论静态约 14GB：参2+梯2+优8GB×… 视精度）：DDP 每卡都存完整的参数/梯度/优化器，峰值显存基本与单卡满载相同；FSDP 把三者切到 4 份，每卡静态约降到 **~1/4**，峰值显存显著低于 DDP（差距随卡数增大），代价是多了 All-Gather/Reduce-Scatter 通信。卡数越多、模型越大，FSDP 省显存越明显。
+
 **练习 4：** 研究 DeepSpeed ZeRO-3 的配置，用 `deepspeed` 训练一个模型。
+
+*参考答案*：DeepSpeed 通过一个 JSON 配置开启 ZeRO-3，训练脚本用 `deepspeed.initialize` 接管模型/优化器。
+
+```json
+{
+  "train_micro_batch_size_per_gpu": 4,
+  "bf16": { "enabled": true },
+  "zero_optimization": {
+    "stage": 3,                          // 切片 参数+梯度+优化器
+    "offload_optimizer": { "device": "cpu" },   // 可选: 优化器卸载到 CPU
+    "offload_param":     { "device": "cpu" }     // 可选: 参数卸载，进一步省显存
+  }
+}
+```
+```python
+import deepspeed
+model_engine, optimizer, _, _ = deepspeed.initialize(
+    model=model, model_parameters=model.parameters(), config="ds_config.json")
+for batch in dataloader:
+    loss = model_engine(batch)
+    model_engine.backward(loss)          # 内部处理梯度切片/通信
+    model_engine.step()
+# 启动: deepspeed --num_gpus=4 train.py
+```
+要点：ZeRO-3 等价于 FSDP（切片参数+梯度+优化器，省显存约 75%）；加 `offload_*` 可把状态卸到 CPU/NVMe，用带宽换显存，能在更少 GPU 上训更大模型，但会拖慢速度。stage 1/2/3 对应只切优化器 / +梯度 / +参数。

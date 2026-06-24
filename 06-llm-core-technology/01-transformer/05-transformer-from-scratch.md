@@ -344,12 +344,78 @@ print(f"LLaMA-7B 单次前向 FLOPs: {flops/1e12:.1f} TFLOPs")
 
 **练习 1：** 运行本节的 GPT 代码，在莎士比亚文本上训练，生成一段文本。
 
+*参考答案*：把 3.2 训练循环里的玩具文本换成莎士比亚语料即可（经典的 `tinyshakespeare`，约 1MB 字符级文本）。
+
+```python
+import urllib.request
+url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+text = urllib.request.urlopen(url).read().decode("utf-8")
+data = torch.tensor([ord(c) for c in text if ord(c) < 256], dtype=torch.long)
+# 其余沿用 3.2 的训练循环（建议 step 增至 2000~5000，loss 降到 ~1.5）
+# 再调用 3.3 的 generate(model, "ROMEO:") 生成文本
+```
+要点：字符级 vocab=256，训练几千步后 loss 从 ~5.5（ln256）降到 ~1.5，生成文本会出现莎剧式的人名行首（如 `ROMEO:`）和近似英语的拼写，但语义仍不连贯——这正是小模型 + 字符级的预期效果。
+
 **练习 2：** 修改模型超参数（层数、维度），观察参数量和生成质量的变化。
+
+*参考答案*：参数量主要随 `d_model²·n_layers` 增长（注意力 `4d²` + FFN `2d·d_ff`，且 `d_ff` 一般取 `4d`，故单层 ≈ `12d²`）。
+
+```python
+for d, L in [(128, 4), (256, 6), (384, 8)]:
+    m = GPT(vocab_size=256, d_model=d, n_heads=d//64, n_layers=L,
+            d_ff=4*d, max_len=64)
+    print(f"d={d}, L={L}: {sum(p.numel() for p in m.parameters()):,} 参数")
+```
+规律：维度/层数翻倍，参数量约按平方/线性增长，训练 loss 更低、生成更连贯，但训练更慢且小数据上易过拟合（train loss 远低于 val loss）。务必保证 `d_model % n_heads == 0`。这是 Scaling Laws 在玩具规模上的直观体现。
 
 ### 进阶题
 
 **练习 3：** 将 FFN 替换为 SwiGLU，将 LayerNorm 替换为 RMSNorm，使其更接近 LLaMA。
 
+*参考答案*：替换两个组件，把 `FeedForward` 换成 SwiGLU、`nn.LayerNorm` 换成 RMSNorm。
+
+```python
+import torch, torch.nn as nn, torch.nn.functional as F
+
+class RMSNorm(nn.Module):
+    """RMSNorm：只按均方根缩放，无均值中心化、无 bias / scale-only norm."""
+    def __init__(self, d, eps=1e-6):
+        super().__init__()
+        self.g = nn.Parameter(torch.ones(d)); self.eps = eps
+    def forward(self, x):  # x: [B, N, d]
+        rms = x.pow(2).mean(-1, keepdim=True).add(self.eps).rsqrt()
+        return x * rms * self.g
+
+class SwiGLU(nn.Module):
+    def __init__(self, d, d_ff):
+        super().__init__()
+        self.gate, self.up = nn.Linear(d, d_ff, bias=False), nn.Linear(d, d_ff, bias=False)
+        self.down = nn.Linear(d_ff, d, bias=False)
+    def forward(self, x):
+        return self.down(F.silu(self.gate(x)) * self.up(x))  # 门控激活 / gated
+```
+在 `Block` 里用 `RMSNorm` 替换 `ln1/ln2`、用 `SwiGLU` 替换 `ffn` 即可。再把位置编码换成 RoPE、MHA 换成 GQA，就几乎等同于 LLaMA 的解码层（参见 4.2 差异表）。RMSNorm 比 LayerNorm 少一次求均值、更快，是 LLaMA 系列标配。
+
 **练习 4：** 添加 KV Cache 优化推理速度——在生成时缓存已计算的 K 和 V。
 
 > **提示：** KV Cache 是推理加速的核心技术，避免重复计算前面 token 的 K 和 V。
+
+*参考答案*：自回归解码时，已生成 token 的 K/V 不随新 token 改变，可缓存复用，每步只需为**新 token**计算 Q/K/V 并拼接历史 K/V。
+
+```python
+def forward(self, x, kv_cache=None):
+    B, N, D = x.shape
+    qkv = self.qkv_proj(x); Q, K, V = qkv.split(D, dim=-1)
+    Q = Q.view(B, N, self.n_heads, self.d_head).transpose(1, 2)  # [B, H, N, d_head]
+    K = K.view(B, N, self.n_heads, self.d_head).transpose(1, 2)
+    V = V.view(B, N, self.n_heads, self.d_head).transpose(1, 2)
+    if kv_cache is not None:                       # 拼接历史 K/V / concat cached
+        K = torch.cat([kv_cache[0], K], dim=2)     # [B, H, N_past+N, d_head]
+        V = torch.cat([kv_cache[1], V], dim=2)
+    new_cache = (K, V)
+    # 解码阶段逐 token：N=1，可省去因果掩码（新 token 可见全部历史）
+    scores = (Q @ K.transpose(-2, -1)) / math.sqrt(self.d_head)
+    out = (F.softmax(scores, dim=-1) @ V).transpose(1, 2).reshape(B, N, D)
+    return self.out_proj(out), new_cache
+```
+复杂度从每步重算整段的 `O(N²)` 降为 `O(N)`（单 token 对历史做一次注意力），总生成从 `O(N³)` 降到 `O(N²)`，代价是显存随序列线性增长（这也是 GQA/MQA 要压缩 KV 头的动机）。

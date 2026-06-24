@@ -204,10 +204,136 @@ plt.show()
 
 **练习 1：** 在中文语料上训练 Word2Vec，测试"国王 - 男人 + 女人 ≈ 女王"等类比关系。
 
+*参考答案*：
+
+中文需要先分词（用 jieba），把每句切成词列表，再喂给 Gensim。
+
+```python
+import jieba
+from gensim.models import Word2Vec
+
+# 1. 分词：每个句子 -> 词列表 / Tokenize each sentence into words
+raw_sentences = [...]                                   # 你的中文语料
+sentences = [list(jieba.cut(s)) for s in raw_sentences]
+
+# 2. 训练 Skip-gram / Train Skip-gram
+model = Word2Vec(sentences, vector_size=200, window=5,
+                 min_count=5, sg=1, epochs=10, workers=4)
+
+# 3. 词类比：国王 - 男人 + 女人 ≈ ?
+result = model.wv.most_similar(positive=["国王", "女人"],
+                               negative=["男人"], topn=3)
+print(result)        # 期望 [('女王', 0.7x), ...]
+```
+
+要点：(1) **中文必须先分词**，词向量的"词"取决于分词结果；(2) 语料要足够大、且包含相关词的足够多上下文，类比关系才学得出来——玩具语料很可能得不到 "女王"；(3) `model.wv.most_similar(positive=[...], negative=[...])` 内部正是在做 `vec(国王) - vec(男人) + vec(女人)` 后找最近邻。
+
 **练习 2：** 对比 CBOW 和 Skip-gram 在相同语料上的训练速度和词相似度效果。
+
+*参考答案*：
+
+只改 `sg` 参数（0=CBOW, 1=Skip-gram），其余完全相同，再计时和对比相似度。
+
+```python
+import time
+from gensim.models import Word2Vec
+
+def train(sg):
+    t0 = time.time()
+    m = Word2Vec(sentences, vector_size=100, window=5,
+                 min_count=5, sg=sg, epochs=10, workers=4)
+    return m, time.time() - t0
+
+cbow, t_cbow = train(sg=0)
+skip, t_skip = train(sg=1)
+print(f"CBOW: {t_cbow:.1f}s  Skip-gram: {t_skip:.1f}s")
+print("CBOW 相似词:", cbow.wv.most_similar("learning", topn=5))
+print("SG   相似词:", skip.wv.most_similar("learning", topn=5))
+```
+
+对比结论（与本文知识点表一致）：
+- **速度**：CBOW **更快**。CBOW 用上下文词的平均去预测 1 个中心词，每个窗口只算一次；Skip-gram 用中心词去分别预测每个上下文词，一个窗口产生多个训练对，计算量更大。
+- **效果**：Skip-gram 对**低频词/罕见词**更好（每个词都被反复当作中心词训练，得到更多更新），词相似度和词类比常更优；CBOW 对**高频词**效果不错且训练快。
+- 选择：语料大、追速度 → CBOW；语料相对小、在意稀有词质量 → Skip-gram（这也是原论文和实践的普遍建议）。
 
 ### 进阶题
 
 **练习 3：** 从零实现 Skip-gram with Negative Sampling（不使用 Gensim）。
 
+*参考答案*：
+
+核心：两套 Embedding（中心词 `in_emb`、上下文词 `out_emb`），正样本标签 1、K 个负样本标签 0，用 BCE 做二分类。
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class SkipGramNS(nn.Module):
+    """Skip-gram with Negative Sampling / 负采样跳字模型."""
+    def __init__(self, vocab_size: int, embed_dim: int):
+        super().__init__()
+        self.in_emb = nn.Embedding(vocab_size, embed_dim)   # 中心词向量
+        self.out_emb = nn.Embedding(vocab_size, embed_dim)  # 上下文词向量
+
+    def forward(self, center, context, neg):
+        """
+        Args:
+            center: 中心词 id. Shape: [B]
+            context: 正样本上下文 id. Shape: [B]
+            neg: 负样本 id. Shape: [B, K]
+        Returns:
+            标量损失 / scalar loss.
+        """
+        v = self.in_emb(center)                 # Shape: [B, D]
+        u_pos = self.out_emb(context)           # Shape: [B, D]
+        u_neg = self.out_emb(neg)               # Shape: [B, K, D]
+
+        # 正样本得分 -> 希望 sigmoid 接近 1
+        pos_score = torch.sum(v * u_pos, dim=1)             # Shape: [B]
+        pos_loss = F.logsigmoid(pos_score)
+        # 负样本得分 -> 希望 sigmoid(-score) 接近 1（即 score 越负越好）
+        neg_score = torch.bmm(u_neg, v.unsqueeze(2)).squeeze(2)  # [B, K]
+        neg_loss = F.logsigmoid(-neg_score).sum(dim=1)     # Shape: [B]
+        return -(pos_loss + neg_loss).mean()    # 最大化对数似然 = 最小化其负值
+```
+
+要点：(1) 负样本按词频的 3/4 次方分布采样（出现越多越可能被采，但被 3/4 次方压平，让稀有词也有机会）；(2) 损失用 `logsigmoid` 而非完整 softmax，把 V 类多分类降为 (1+K) 个二分类，复杂度从 O(V) 降到 O(K)，这正是负采样加速 100x 的来源；(3) 训练完一般取 `in_emb` 作为词向量。
+
 **练习 4：** 用 Word2Vec 作为特征输入到 LSTM 做文本分类，对比随机初始化 Embedding 的效果差异。
+
+*参考答案*：
+
+把训练好的 Word2Vec 词向量按词表顺序拼成权重矩阵，用 `from_pretrained` 灌进 `nn.Embedding`。
+
+```python
+import torch
+import torch.nn as nn
+import numpy as np
+
+def build_embedding(w2v_model, word2idx, embed_dim):
+    """用 Word2Vec 构造预训练 Embedding 权重 / Build pretrained weights."""
+    weights = np.random.normal(0, 0.1, (len(word2idx), embed_dim))
+    for word, idx in word2idx.items():
+        if word in w2v_model.wv:                       # OOV 保留随机初始化
+            weights[idx] = w2v_model.wv[word]
+    return torch.FloatTensor(weights)                  # Shape: [V, embed_dim]
+
+class TextClassifier(nn.Module):
+    def __init__(self, pretrained, hidden, n_cls, freeze=False):
+        super().__init__()
+        # freeze=True 冻结词向量；数据少时建议先冻结
+        self.embedding = nn.Embedding.from_pretrained(pretrained, freeze=freeze)
+        self.lstm = nn.LSTM(pretrained.size(1), hidden, batch_first=True)
+        self.fc = nn.Linear(hidden, n_cls)
+
+    def forward(self, x):                              # x: [B, T]
+        emb = self.embedding(x)                        # [B, T, D]
+        _, (h, _) = self.lstm(emb)
+        return self.fc(h[-1])                          # [B, n_cls]
+```
+
+效果对比结论：
+- **数据量小时**，Word2Vec 预训练初始化通常**明显更好**——预训练向量已编码语义，相当于迁移了大规模无标注语料的知识，模型不必从零学词义，收敛更快、泛化更好。
+- **数据量很大时**，随机初始化也能学到足够好的任务专属向量，两者差距缩小。
+- 实践建议：小数据先 `freeze=True` 只训上层，再视情况解冻微调（`freeze=False`）让词向量适配具体任务；OOV 词保留随机初始化并随训练更新。

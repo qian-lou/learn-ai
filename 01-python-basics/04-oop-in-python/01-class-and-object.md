@@ -136,4 +136,44 @@ query = QueryBuilder().from_table("users").where("age > 18").where("active = 1")
 
 **练习 1：** 将一个 Java POJO 类翻译为 Python 类，包含属性验证。
 
+*参考答案*：
+```python
+# Java POJO: class User { private String name; private int age; +getter/setter }
+class User:
+    def __init__(self, name: str, age: int) -> None:
+        self.name = name        # 触发下方 setter 校验 / triggers setter validation
+        self.age = age
+
+    @property
+    def age(self) -> int:       # 等价 getAge() / getter
+        return self._age
+
+    @age.setter
+    def age(self, value: int) -> None:   # 等价 setAge() + 校验 / setter + validation
+        if value < 0:
+            raise ValueError("age 不能为负 / age must be non-negative")
+        self._age = value
+```
+
 **练习 2：** 实现一个 `BankAccount` 类，支持存款、取款，余额不能为负。用 `@property` 实现 balance 的只读访问。
+
+*参考答案*：
+```python
+class BankAccount:
+    def __init__(self, balance: float = 0.0) -> None:
+        self._balance = balance     # _ 约定私有 / convention-private
+
+    @property
+    def balance(self) -> float:     # 只读：不提供 setter / read-only, no setter
+        return self._balance
+
+    def deposit(self, amount: float) -> None:
+        if amount <= 0:
+            raise ValueError("存款金额需为正 / deposit must be positive")
+        self._balance += amount
+
+    def withdraw(self, amount: float) -> None:
+        if amount > self._balance:
+            raise ValueError("余额不足 / insufficient balance")
+        self._balance -= amount     # 保证余额非负 / keeps balance >= 0
+```

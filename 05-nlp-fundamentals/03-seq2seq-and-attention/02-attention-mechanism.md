@@ -244,10 +244,106 @@ plt.show()
 
 **练习 1：** 实现 Scaled Dot-Product Attention 并验证输出形状。
 
+*参考答案*：
+
+实现见本文 3.2 节的 `scaled_dot_product_attention`。验证形状：输出与 Q 同长（T_q），最后一维与 V 相同（d_v）；注意力权重为 `[T_q, T_k]`。
+
+```python
+import torch
+
+B, T_q, T_k, d_k, d_v = 2, 4, 6, 8, 16
+Q = torch.randn(B, T_q, d_k)      # Shape: [B, T_q, d_k]
+K = torch.randn(B, T_k, d_k)      # Shape: [B, T_k, d_k]
+V = torch.randn(B, T_k, d_v)      # Shape: [B, T_k, d_v]
+
+out, attn = scaled_dot_product_attention(Q, K, V)
+print(out.shape)                  # [2, 4, 16]  -> [B, T_q, d_v]
+print(attn.shape)                 # [2, 4, 6]   -> [B, T_q, T_k]
+# 每个 query 的注意力权重在 T_k 维上和为 1（softmax 性质）
+print(torch.allclose(attn.sum(-1), torch.ones(B, T_q)))   # True
+```
+
+要点验证三件事：(1) 输出形状 `[B, T_q, d_v]`——query 个数决定输出长度，d_v 决定特征维；(2) 权重形状 `[B, T_q, T_k]`——每个 query 对所有 key 各一个权重；(3) 权重沿 `dim=-1`（T_k）求和为 1，这是 softmax 归一化的直接体现。
+
 **练习 2：** 解释 Causal Mask 如何保证 GPT 的自回归特性。
+
+*参考答案*：
+
+自回归要求：预测位置 t 的 token 时，**只能依赖位置 1..t，绝不能看到 t 之后的未来 token**（否则就是"作弊"——用答案预测答案）。
+
+Causal Mask 用一个**下三角掩码**实现这一点：在 attention 分数矩阵 `scores[i, j]`（query i 关注 key j）上，把所有 `j > i` 的位置置为 `-inf`，softmax 后这些位置权重变成 0。
+
+```python
+import torch
+
+def causal_mask(T):
+    # 下三角为 1（可见），上三角为 0（屏蔽未来）/ lower-triangular = visible
+    return torch.tril(torch.ones(T, T)).bool()        # [T, T]
+
+# 在 scaled_dot_product_attention 里：
+# scores = scores.masked_fill(mask == 0, float('-inf'))
+# attn = softmax(scores)  -> 未来位置权重恒为 0
+```
+
+为什么这样就保证了自回归：
+- 第 i 行（query i）只对 `j ≤ i` 的 key 有非零权重，所以位置 i 的输出**只由 1..i 的信息加权得到**，完全看不到未来。
+- 由此，训练时可以**一次并行**算出所有位置的预测（每个位置都自动只看到自己左边），却等价于推理时逐 token 自回归生成——这正是 GPT 能高效训练的关键。
+- 对比 BERT：BERT 用全 1 掩码（双向，可看到整句），适合理解任务但不能自回归生成；GPT 用 causal mask，专为从左到右生成设计。
 
 ### 进阶题
 
 **练习 3：** 实现完整的 Multi-Head Attention，并测试 n_heads=1, 4, 8 对模型效果的影响。
 
+*参考答案*：
+
+实现见本文 3.3 节的 `MultiHeadAttention`。注意 `d_model` 固定时，**头数越多每个头维度 `d_head = d_model / n_heads` 越小**，总参数量不变。
+
+```python
+d_model = 64
+x = torch.randn(2, 10, d_model)        # [B, T, d_model]
+for h in (1, 4, 8):
+    mha = MultiHeadAttention(d_model, n_heads=h)
+    out, attn = mha(x, x, x)           # self-attention
+    print(f"n_heads={h}: out={tuple(out.shape)}, "
+          f"d_head={d_model//h}, attn={tuple(attn.shape)}")
+    # out 始终 [2,10,64]；attn 为 [2, h, 10, 10]
+```
+
+n_heads 对效果的影响（结论）：
+- **n_heads=1**：只有一种注意力模式，表达力受限——所有"关注"必须挤在同一子空间里，难以同时建模多种关系。
+- **n_heads=4/8**：把表示拆到多个子空间并行注意，不同头可各自学习不同模式（句法、指代、位置邻近等），**通常效果更好**，这正是多头设计的初衷（本文 4.2 节）。
+- 但**并非越多越好**：`d_model` 固定时头太多会让每个头维度 `d_head` 过小（如 d_model=64、n_heads=8 时 d_head 仅 8），单头表达力下降，收益递减甚至变差。实践中头数与 `d_head`（常取 64 左右）需平衡——这也是 BERT-base 用 12 头、d_head=64 的原因。注意无论几头，输出维度和总参数量都不变。
+
 **练习 4：** 用 BERT 提取 Attention 权重（`output_attentions=True`），可视化模型在不同层对句子的关注模式。
+
+*参考答案*：
+
+加载时设 `output_attentions=True`，前向后 `outputs.attentions` 是长度 = 层数的元组，每个 `[B, n_heads, T, T]`。
+
+```python
+import torch
+import matplotlib.pyplot as plt
+from transformers import AutoModel, AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased",
+                                  output_attentions=True).eval()
+
+enc = tok("The cat sat on the mat", return_tensors="pt")
+with torch.no_grad():
+    out = model(**enc)
+
+attentions = out.attentions          # tuple(len=12), each [1, 12, T, T]
+tokens = tok.convert_ids_to_tokens(enc["input_ids"][0])
+
+# 可视化第 layer 层、第 head 个头的注意力矩阵 / heatmap of one head
+layer, head = 5, 0
+attn = attentions[layer][0, head]    # [T, T]
+plt.imshow(attn, cmap="Blues")
+plt.xticks(range(len(tokens)), tokens, rotation=90)
+plt.yticks(range(len(tokens)), tokens)
+plt.title(f"Layer {layer} Head {head}")
+plt.colorbar(); plt.show()
+```
+
+预期观察（与 BertViz 等研究一致）：不同层/头展现**不同的可解释模式**——有的头关注**相邻词**（局部，对角线偏移），有的头大量关注 `[SEP]` 或 `[CLS]`（作为"无操作/汇聚"位置），有的头捕捉**句法依存**（如动词关注其主语/宾语）或**指代**（代词关注先行词）。整体趋势：浅层偏局部/位置关系，深层偏语义/长距离依赖。每行（每个 query token）的注意力权重和为 1，热力图越蓝表示关注越强。

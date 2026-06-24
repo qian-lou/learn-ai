@@ -183,10 +183,100 @@ for name, pipe in pipelines.items():
 
 **练习 1：** 用 TF-IDF + 逻辑回归在 20 Newsgroups 数据集（`sklearn.datasets.fetch_20newsgroups`）上做多分类。
 
+*参考答案*：
+
+```python
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import classification_report
+
+# 自带 train/test 划分；去掉 header/footer/quote 防止泄漏
+# Built-in split; strip metadata to avoid leakage
+train = fetch_20newsgroups(subset='train', remove=('headers', 'footers', 'quotes'))
+test = fetch_20newsgroups(subset='test', remove=('headers', 'footers', 'quotes'))
+
+clf = Pipeline([
+    ("tfidf", TfidfVectorizer(stop_words='english', sublinear_tf=True,
+                              max_features=50000, ngram_range=(1, 2))),
+    ("lr", LogisticRegression(max_iter=1000, C=10.0)),  # 多分类默认 softmax
+])
+clf.fit(train.data, train.target)
+print(classification_report(test.target, clf.predict(test.data),
+                            target_names=test.target_names))
+```
+
+要点：LogisticRegression 对多分类自动用 softmax（multinomial），无需特殊设置；务必用 `remove=(...)` 去掉邮件头/引用，否则模型会"作弊"靠元数据分类，虚高准确率。这套 baseline 在 20NG 上 macro-F1 通常可达 ~0.69 左右。
+
 **练习 2：** 解释为什么 n-gram（bigram、trigram）能部分解决 BoW 忽略词序的问题。
+
+*参考答案*：
+
+纯 BoW（unigram）把每个词独立计数，因此 "not good" 和 "good not" 的特征完全一样——词序信息全部丢失。
+
+n-gram 的做法是把**连续的 n 个词当作一个整体特征**：
+- bigram 会产生 `not_good`、`very_good` 这样的特征；"not good" 含 `not_good`，"good not" 含 `good_not`，二者特征不同 → **局部词序被保留**。
+- 这对情感分类尤其关键：否定词（not、never）+ 形容词的搭配靠 bigram 才能被捕捉，否则模型会把 "not good" 误判为正面。
+
+为什么只是"部分"解决：
+- n-gram 只能捕捉**长度 ≤ n 的局部窗口**内的顺序，跨度更大的依赖（如主语和很远的谓语）仍然丢失。
+- 代价是**特征维度爆炸**（组合数随 n 指数增长）、数据稀疏、大量 n-gram 只出现一两次。所以实践中一般用到 bigram/trigram 为止，并配合 `max_features`、`min_df` 控制规模。真正彻底解决词序问题要靠 RNN/Transformer。
 
 ### 进阶题
 
 **练习 3：** 对比 TF-IDF + LR 和 BERT 在 IMDB 情感分类上的效果差异，分析各自的优劣势。
 
+*参考答案*：
+
+IMDB（二分类，5 万条影评）上的典型对比：
+
+| 维度 | TF-IDF + LR | 微调 BERT |
+|------|-------------|-----------|
+| 准确率 | ~88–90% | **~93–95%** |
+| 训练成本 | 秒级、纯 CPU | 需 GPU、分钟到小时级 |
+| 推理速度 | 极快 | 慢（需前向 Transformer）|
+| 可解释性 | 强（看特征权重）| 弱（黑盒）|
+| 是否懂词序/语义 | 弱（靠 n-gram 局部）| **强（自注意力 + 上下文）**|
+| 数据需求 | 小数据也能用 | 依赖大规模预训练 |
+
+分析：
+- **TF-IDF+LR 优势**：简单、快、可解释、几乎零成本，是任何文本任务都该先跑的 baseline；在数据少、词面信号强（影评里 "terrible"/"masterpiece" 很显眼）的任务上性价比极高。
+- **BERT 优势**：靠预训练 + 上下文自注意力，能理解否定、转折、长距离依赖和同义改写（"not bad" ≈ 正面），因此精度上限更高，约高出 3–6 个百分点。
+- 结论：精度敏感且有算力 → BERT；要快速验证、可解释或资源受限 → TF-IDF+LR。两者差距在 IMDB 这种相对简单的任务上不算悬殊，任务越复杂、越依赖语义，BERT 的优势越大。
+
 **练习 4：** 实现一个简单的文档搜索引擎：输入查询语句，用 TF-IDF 余弦相似度返回最相关的文档。
+
+*参考答案*：
+
+把查询当作"一篇短文档"，用 `transform`（而非 `fit`）映射到同一 TF-IDF 空间，再算余弦相似度排序。
+
+```python
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+class TfidfSearchEngine:
+    """基于 TF-IDF 余弦相似度的极简搜索引擎."""
+    def __init__(self, docs):
+        self.docs = docs
+        self.vec = TfidfVectorizer(stop_words='english')
+        self.doc_mat = self.vec.fit_transform(docs)   # [N_docs, V]
+
+    def search(self, query: str, top_k: int = 3):
+        # Time: O(N·V) Space: O(N)，N=文档数, V=非零词项数
+        q_vec = self.vec.transform([query])           # [1, V]
+        sims = cosine_similarity(q_vec, self.doc_mat).ravel()  # [N_docs]
+        top = np.argsort(sims)[::-1][:top_k]          # 取相似度最高的 k 个
+        return [(self.docs[i], float(sims[i])) for i in top]
+
+engine = TfidfSearchEngine([
+    "Python is great for machine learning",
+    "I love deep learning and neural networks",
+    "The weather is nice today",
+])
+for doc, score in engine.search("learning AI", top_k=2):
+    print(f"{score:.3f}  {doc}")
+```
+
+要点：查询必须用语料 `fit` 出来的同一个 vectorizer 做 `transform`，保证落在相同的词项空间；余弦相似度天然忽略文档长度差异；`argsort` 降序取 top-k 即可。这就是经典向量空间检索模型的最小实现。

@@ -149,8 +149,85 @@ async def consumer(queue: asyncio.Queue):
 
 ### 基础题
 **练习 1：** 用 `asyncio.gather` 并发下载 5 个 URL。
+
+*参考答案*：
+```python
+import asyncio
+
+async def download(url: str) -> str:
+    await asyncio.sleep(1)          # 模拟 I/O / simulate I/O
+    return f"ok: {url}"
+
+async def main() -> list[str]:
+    urls = [f"http://site/{i}" for i in range(5)]
+    # gather 并发等待全部 / concurrently await all, ~1s total not 5s
+    return await asyncio.gather(*(download(u) for u in urls))
+
+print(asyncio.run(main()))
+```
+
 **练习 2：** 用 Semaphore 限制最大并发数为 3。
+
+*参考答案*：
+```python
+import asyncio
+
+async def fetch(url: str, sem: asyncio.Semaphore) -> str:
+    async with sem:                 # 同时最多 3 个进入 / at most 3 concurrently
+        await asyncio.sleep(1)
+        return f"ok: {url}"
+
+async def main() -> list[str]:
+    sem = asyncio.Semaphore(3)      # 并发上限 / concurrency cap
+    urls = [f"http://site/{i}" for i in range(10)]
+    return await asyncio.gather(*(fetch(u, sem) for u in urls))
+
+asyncio.run(main())
+```
 
 ### 进阶题
 **练习 3：** 实现异步批量 LLM 推理，支持进度条和超时控制。
+
+*参考答案*：
+```python
+import asyncio
+from tqdm.asyncio import tqdm_asyncio   # 异步进度条 / async progress bar
+
+async def call_llm(prompt: str, timeout: float = 10.0) -> str:
+    try:
+        # wait_for 实现单请求超时 / per-request timeout
+        return await asyncio.wait_for(_infer(prompt), timeout=timeout)
+    except asyncio.TimeoutError:
+        return "TIMEOUT"
+
+async def batch_infer(prompts: list[str], concurrency: int = 5) -> list[str]:
+    sem = asyncio.Semaphore(concurrency)
+    async def task(p: str) -> str:
+        async with sem:
+            return await call_llm(p)
+    # tqdm_asyncio.gather 在完成时刷新进度 / updates bar as tasks finish
+    return await tqdm_asyncio.gather(*(task(p) for p in prompts))
+```
+
 **练习 4：** 实现一个异步任务队列，支持优先级和重试。
+
+*参考答案*：
+```python
+import asyncio
+
+async def worker(q: asyncio.PriorityQueue, max_retry: int = 3) -> None:
+    while True:
+        priority, payload = await q.get()      # 数值越小优先级越高 / lower = higher
+        for attempt in range(1, max_retry + 1):
+            try:
+                await handle(payload)           # 业务处理 / do work
+                break
+            except Exception:
+                if attempt == max_retry:
+                    print(f"丢弃 / drop: {payload}")
+                else:
+                    await asyncio.sleep(2 ** attempt)  # 指数退避重试 / backoff retry
+        q.task_done()
+
+# q = asyncio.PriorityQueue(); await q.put((0, "urgent")); await q.put((10, "low"))
+```

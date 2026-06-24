@@ -172,10 +172,48 @@ for r in results[:3]:
 
 **练习 1：** 用 BERT 微调一个情感分类模型（IMDB 数据集）。
 
+*参考答案*：复用 3.3 的训练框架，数据换成 IMDB（`datasets` 库一行加载）。
+
+```python
+from datasets import load_dataset
+from transformers import (AutoTokenizer, AutoModelForSequenceClassification,
+                          TrainingArguments, Trainer)
+ds = load_dataset("imdb")                       # train/test 各 25000 条
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+enc = ds.map(lambda b: tok(b["text"], truncation=True, max_length=256), batched=True)
+model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
+args = TrainingArguments(output_dir="out", per_device_train_batch_size=16,
+                         num_train_epochs=2, learning_rate=2e-5)  # 微调用小 lr
+Trainer(model, args, train_dataset=enc["train"], eval_dataset=enc["test"]).train()
+```
+要点：微调 lr 取 `2e-5` 量级、1–3 个 epoch 足够，BERT-base 在 IMDB 上准确率约 92%–94%。`[CLS]` 经分类头输出 2 类 logits，损失为交叉熵。
+
 **练习 2：** 对比 BERT-base 和 DistilBERT 在分类任务上的准确率和推理速度。
+
+*参考答案*：把练习 1 的 checkpoint 换成 `distilbert-base-uncased` 再跑一遍即可对比。DistilBERT 通过知识蒸馏得到，**6 层（BERT-base 为 12 层）、参数减少约 40%（66M vs 110M）、推理快约 60%**，而在 GLUE/情感分类上保留约 **97% 的准确率**（典型仅低 1–2 个百分点）。结论：对延迟/成本敏感的生产场景，DistilBERT 是高性价比选择；追求极致精度才用 BERT-base/large。测速时注意固定 batch、序列长度并预热，用 `time` 统计 tokens/sec。
 
 ### 进阶题
 
 **练习 3：** 用 BERT 做命名实体识别（NER），使用 `BertForTokenClassification`。
 
+*参考答案*：NER 是 **token 级**分类，每个 token 预测 BIO 标签（如 `B-PER/I-PER/B-LOC/O`）。
+
+```python
+from transformers import AutoTokenizer, AutoModelForTokenClassification
+from datasets import load_dataset
+ds = load_dataset("conll2003")                       # 标准 NER 数据集
+tok = AutoTokenizer.from_pretrained("bert-base-cased")
+model = AutoModelForTokenClassification.from_pretrained("bert-base-cased", num_labels=9)
+```
+关键难点：BERT 用子词（subword）分词，一个词可能切成多个 token，需用 `word_ids()` 做**标签对齐**——只给每个词的首个 subword 打真实标签，其余 subword 标为 `-100`（交叉熵忽略）。输出 logits 形状 `[B, N, num_labels]`，对每个 token 取 argmax。BERT-base-cased 在 CoNLL-2003 上 F1 约 91%。
+
 **练习 4：** 分析 BERT 不同层的表示：浅层偏语法，深层偏语义。用 probing task 验证。
+
+*参考答案*：探针（probing）做法：冻结 BERT，取某一层的隐藏状态作为特征，训一个**极简线性分类器**预测某种语言学属性，用该探针的准确率衡量"这层编码了多少此类信息"。
+
+```python
+model = AutoModel.from_pretrained("bert-base-uncased", output_hidden_states=True)
+hs = model(**inputs).hidden_states   # tuple(len=13): 第0层为嵌入, 1..12为各层
+# 对每层 hs[i] 取 token 表示 -> 训练线性探针预测 POS / 句法深度 / 共指
+```
+典型结论（Tenney et al. 2019 "BERT Rediscovers the Classical NLP Pipeline"、Jawahar et al. 2019）：**底层**编码表层与词性/句法信息（POS、成分边界），**中层**编码句法依存，**高层**编码语义与共指、语义角色。即 BERT 各层近似复刻了经典 NLP 流水线，从浅层语法到深层语义逐级抽象。

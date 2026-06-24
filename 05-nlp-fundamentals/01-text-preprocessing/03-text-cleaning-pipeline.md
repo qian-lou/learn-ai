@@ -176,7 +176,7 @@ def clean_chinese(text: str) -> str:
     # 全角转半角 / Full-width to half-width
     text = unicodedata.normalize('NFKC', text)
     # 去除中文标点以外的特殊字符
-    text = re.sub(r'[^\u4e00-\u9fff\u3000-\u303f\uff00-\uffefu0020-\u007ea-zA-Z0-9]', '', text)
+    text = re.sub(r'[^\u4e00-\u9fff\u3000-\u303f\uff00-\uffef -\u007ea-zA-Z0-9]', '', text)
     # 合并空白
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -243,10 +243,142 @@ print(f"总计: {stats.total}, 通过: {stats.passed} ({stats.passed/stats.total
 
 **练习 1：** 编写一个正则表达式，提取文本中的所有 URL、邮箱和电话号码。
 
+*参考答案*：
+
+```python
+import re
+from typing import Dict, List
+
+URL_RE = re.compile(r'https?://[^\s<>"\']+|www\.[^\s<>"\']+')
+EMAIL_RE = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
+# 电话：可选国家码 + 3-4 段数字，允许空格/横线/括号分隔
+PHONE_RE = re.compile(r'(?:\+?\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)[\s.-]?)?\d{3,4}[\s.-]?\d{4}')
+
+def extract_entities(text: str) -> Dict[str, List[str]]:
+    """提取 URL / 邮箱 / 电话 / Extract urls, emails, phones.
+
+    Returns:
+        各类匹配结果的字典 / dict of matched lists.
+    """
+    return {
+        "urls": URL_RE.findall(text),
+        "emails": EMAIL_RE.findall(text),
+        "phones": PHONE_RE.findall(text),
+    }
+
+sample = "Contact us at info@test.com or visit https://example.com, tel: +1 415-555-1234"
+print(extract_entities(sample))
+```
+
+要点：先抽邮箱再抽 URL/电话可减少误匹配；电话号码格式各国差异极大，正则只能覆盖常见模式，工业级场景建议用 `phonenumbers` 库做校验。`[A-Za-z]{2,}` 限制邮箱顶级域至少两位，避免把句号当成域名后缀。
+
 **练习 2：** 对比清洗前后数据对 TF-IDF 分类模型效果的影响。
+
+*参考答案*：
+
+实验设计：同一份带噪文本（含 HTML、URL、大小写混乱、多余空白），分别用"原始"和"`clean_text` 清洗后"两个版本训练同一个 `TfidfVectorizer + LogisticRegression`，对比测试集 F1。
+
+```python
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import f1_score
+
+def run(train_texts, test_texts, y_train, y_test):
+    pipe = Pipeline([("tfidf", TfidfVectorizer()), ("lr", LogisticRegression(max_iter=1000))])
+    pipe.fit(train_texts, y_train)
+    return f1_score(y_test, pipe.predict(test_texts), average='macro')
+
+raw_f1 = run(raw_train, raw_test, y_train, y_test)
+clean_f1 = run([clean_text(t) for t in raw_train],
+               [clean_text(t) for t in raw_test], y_train, y_test)
+print(f"raw={raw_f1:.4f}  clean={clean_f1:.4f}")
+```
+
+预期结论与原因：
+- 清洗通常带来**小幅但稳定的提升**。主要收益来自**统一词形**：`<p>Good</p>`、`good`、`Good ` 经清洗后归并为同一个 token，否则它们在 TF-IDF 里是不同特征，词表被噪声稀释、有效信号变弱。
+- 去 HTML/URL 还能**缩小词表、降维**，减少过拟合到无意义 token 的风险。
+- 注意：清洗不是越狠越好。对 TF-IDF 这类传统模型，去停用词、统一大小写一般有益；但**过度清洗**（如删掉所有标点、否定词）可能抹掉判别信号，反而掉点——应以验证集 F1 为准做消融。
 
 ### 进阶题
 
 **练习 3：** 实现基于 MinHash 的近似去重算法。
 
+*参考答案*：
+
+MinHash 用多个哈希函数估计两个文档 shingle 集合的 Jaccard 相似度：两个集合的 MinHash 签名在某一位相等的概率，恰好等于它们的 Jaccard 相似度。
+
+```python
+import re
+from typing import List, Set
+
+def shingles(text: str, k: int = 5) -> Set[str]:
+    """生成 k-shingle（k 个连续词）/ k-word shingles."""
+    words = re.findall(r'\w+', text.lower())
+    return {" ".join(words[i:i + k]) for i in range(len(words) - k + 1)}
+
+def minhash_signature(shs: Set[str], num_perm: int = 128) -> List[int]:
+    """计算 MinHash 签名 / Compute MinHash signature.
+
+    用 num_perm 个不同种子的哈希，取每个哈希下的最小值。
+    Time: O(|shs| * num_perm)  Space: O(num_perm)
+    """
+    sig = []
+    for seed in range(num_perm):
+        # 对每个 shingle 加盐哈希，取最小 / min over salted hashes
+        sig.append(min(hash((seed, s)) & 0xFFFFFFFF for s in shs))
+    return sig
+
+def estimated_jaccard(sig_a: List[int], sig_b: List[int]) -> float:
+    # 签名相等位的比例 ≈ Jaccard 相似度 / fraction of equal positions
+    equal = sum(1 for a, b in zip(sig_a, sig_b) if a == b)
+    return equal / len(sig_a)
+
+# 近似去重：相似度超过阈值则判为重复 / dedup by threshold
+def is_duplicate(text_a, text_b, threshold=0.8):
+    sa, sb = minhash_signature(shingles(text_a)), minhash_signature(shingles(text_b))
+    return estimated_jaccard(sa, sb) >= threshold
+```
+
+要点：num_perm 越大估计越准但越慢（128 是常用值）；真实大规模去重还需配合 **LSH（局部敏感哈希）分桶**，把"两两比较 O(N²)"降到近似 O(N)，否则文档量大时无法承受。生产中可直接用 `datasketch` 库的 `MinHash + MinHashLSH`。
+
 **练习 4：** 从 Wikipedia dump 中提取纯文本，构建一个清洗 pipeline，统计最终数据量。
+
+*参考答案*：
+
+Wikipedia dump 是 wiki 标记的 XML，不能直接用，需先抽正文再接本文的清洗流水线。
+
+```python
+# 1. 抽取纯文本：用现成工具解析 wiki markup
+#    pip install wikiextractor
+#    python -m wikiextractor.WikiExtractor enwiki-latest-pages-articles.xml.bz2 \
+#        --json -o extracted/
+#    输出每行一个 JSON：{"id":..., "title":..., "text": "纯文本"}
+
+import json, glob
+from dataclasses import dataclass
+
+@dataclass
+class Stats:
+    total: int = 0
+    passed: int = 0
+    chars: int = 0
+
+pipeline = TextCleaningPipeline()   # 复用本文 3.2 节的流水线
+stats = Stats()
+
+for path in glob.glob("extracted/**/wiki_*", recursive=True):
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            doc = json.loads(line)
+            stats.total += 1
+            cleaned = pipeline.clean(doc["text"])   # 清洗 + 长度/去重/质量过滤
+            if cleaned:
+                stats.passed += 1
+                stats.chars += len(cleaned)
+
+print(f"文章数: {stats.total}, 保留: {stats.passed} "
+      f"({stats.passed/stats.total:.1%}), 字符数: {stats.chars:,}")
+```
+
+要点：(1) 用 `wikiextractor` 等工具去除 `[[链接]]`、模板、表格等 wiki 标记，得到纯文本；(2) 再接本文的 `TextCleaningPipeline`（长度过滤、MD5 去重、质量启发式）；(3) 流式逐行处理，避免把整个 dump 读进内存。英文维基约数百万篇，清洗后保留率与阈值有关，通常能保留大部分长正文，过滤掉重定向页、极短消歧义页等。

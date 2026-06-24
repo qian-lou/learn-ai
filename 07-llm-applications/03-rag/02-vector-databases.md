@@ -70,8 +70,8 @@ from chromadb.utils import embedding_functions
 
 client = chromadb.PersistentClient(path="./chroma_db")
 
-# 使用 HuggingFace Embedding
-ef = embedding_functions.HuggingFaceEmbeddingFunction(
+# 本地 SentenceTransformer Embedding（HuggingFaceEmbeddingFunction 走 HF API 需 key）
+ef = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="BAAI/bge-base-zh-v1.5"
 )
 
@@ -155,10 +155,89 @@ L2 距离 (欧氏距离):
 
 **练习 1：** 用 Chroma 构建一个文档检索系统，支持语义搜索。
 
+*参考答案*：
+
+```python
+import chromadb
+from chromadb.utils import embedding_functions
+
+client = chromadb.PersistentClient(path="./chroma_db")
+# 本地 SentenceTransformer，免 API key / local embedding, no API key
+ef = embedding_functions.SentenceTransformerEmbeddingFunction("BAAI/bge-base-zh-v1.5")
+col = client.get_or_create_collection("docs", embedding_function=ef)
+
+col.add(documents=["Python 是编程语言", "深度学习使用神经网络", "向量数据库支持语义搜索"],
+        ids=["d1", "d2", "d3"])
+# 语义搜索：按含义匹配而非字面 / semantic search by meaning, not keywords
+print(col.query(query_texts=["哪种语言适合编程"], n_results=2)["documents"])
+```
+
 **练习 2：** 对比 Faiss 的 Flat、IVF、HNSW 索引在 10 万条数据上的速度和精度。
+
+*参考答案*：以 Flat 精确结果为 ground truth，统计 IVF/HNSW 的 Recall@k 与查询耗时。Flat 100% 但慢，HNSW 近 100% 且最快，IVF 介于两者。
+
+```python
+import faiss, numpy as np, time
+
+d, n = 768, 100_000
+xb = np.random.randn(n, d).astype("float32")
+xq = np.random.randn(100, d).astype("float32")
+
+flat = faiss.IndexFlatL2(d); flat.add(xb)
+_, gt = flat.search(xq, 5)                    # ground truth
+
+ivf = faiss.IndexIVFFlat(faiss.IndexFlatL2(d), d, 100)
+ivf.train(xb); ivf.add(xb); ivf.nprobe = 10
+hnsw = faiss.IndexHNSWFlat(d, 32); hnsw.add(xb)
+
+for name, idx in [("Flat", flat), ("IVF", ivf), ("HNSW", hnsw)]:
+    t = time.perf_counter(); _, I = idx.search(xq, 5); dt = time.perf_counter() - t
+    # Recall@5 = 近似结果与精确结果的重合率 / overlap with exact top-5
+    recall = np.mean([len(set(a) & set(b)) / 5 for a, b in zip(I, gt)])
+    print(f"{name}: {dt * 1000:.1f}ms, Recall@5={recall:.3f}")
+```
 
 ### 进阶题
 
 **练习 3：** 用 Faiss 构建百万级向量索引，测量不同 nprobe 值的精度-速度权衡。
 
+*参考答案*：nprobe 是 IVF 检索时搜索的聚类数，越大越精确但越慢——典型的精度-速度权衡。
+
+```python
+import faiss, numpy as np, time
+
+d, n = 768, 1_000_000
+xb = np.random.randn(n, d).astype("float32")
+xq = np.random.randn(100, d).astype("float32")
+
+flat = faiss.IndexFlatL2(d); flat.add(xb)
+_, gt = flat.search(xq, 10)
+
+ivf = faiss.IndexIVFFlat(faiss.IndexFlatL2(d), d, 1000)
+ivf.train(xb); ivf.add(xb)
+for nprobe in (1, 10, 50, 100):
+    ivf.nprobe = nprobe                       # 搜索的聚类数 / clusters probed
+    t = time.perf_counter(); _, I = ivf.search(xq, 10); dt = time.perf_counter() - t
+    recall = np.mean([len(set(a) & set(b)) / 10 for a, b in zip(I, gt)])
+    print(f"nprobe={nprobe}: {dt * 1000:.1f}ms, Recall@10={recall:.3f}")
+```
+
 **练习 4：** 实现 Hybrid Search：BM25 关键词搜索 + 向量语义搜索的加权融合。
+
+*参考答案*：两路检索分数各自归一化到 [0,1] 后加权求和重排，兼顾精确词命中与语义相似。
+
+```python
+import numpy as np
+from rank_bm25 import BM25Okapi
+
+corpus = ["Python 是编程语言", "深度学习使用神经网络", "向量数据库支持语义搜索"]
+bm25 = BM25Okapi([doc.split() for doc in corpus])
+
+def hybrid_search(query, query_vec, doc_vecs, alpha=0.5, k=2):
+    # 归一化后加权融合 / min-max normalize then weighted sum
+    lex = np.array(bm25.get_scores(query.split()))
+    sem = doc_vecs @ query_vec                # 已归一化向量的内积=余弦 / cosine via dot
+    norm = lambda s: (s - s.min()) / (s.ptp() + 1e-9)
+    score = alpha * norm(lex) + (1 - alpha) * norm(sem)
+    return np.argsort(score)[::-1][:k]        # Top-k 索引 / top-k indices
+```

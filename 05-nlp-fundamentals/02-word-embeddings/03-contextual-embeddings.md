@@ -179,10 +179,123 @@ contexts = [
 
 **练习 1：** 用 BERT 提取 "bank" 在 5 个不同语境中的向量，计算两两余弦相似度，验证多义词区分能力。
 
+*参考答案*：
+
+```python
+import torch
+import torch.nn.functional as F
+from transformers import AutoModel, AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased").eval()
+
+sents = [
+    "I deposited money at the bank.",          # 金融
+    "The bank approved my loan.",              # 金融
+    "We sat on the river bank.",               # 河岸
+    "The boat reached the left bank.",         # 河岸
+    "She works as a bank teller.",             # 金融
+]
+
+def bank_vec(sentence):
+    enc = tok(sentence, return_tensors="pt")
+    with torch.no_grad():
+        out = model(**enc).last_hidden_state[0]        # [seq_len, 768]
+    ids = enc["input_ids"][0].tolist()
+    pos = ids.index(tok.convert_tokens_to_ids("bank")) # 找 "bank" 的位置
+    return out[pos]                                    # [768]
+
+vecs = torch.stack([bank_vec(s) for s in sents])       # [5, 768]
+sim = F.cosine_similarity(vecs.unsqueeze(1), vecs.unsqueeze(0), dim=-1)
+print(sim.round(decimals=2))
+```
+
+预期结论：**同义语境的 "bank" 之间相似度更高，跨义语境更低**。即句 0/1/4（金融）两两相似度明显高于"金融 vs 河岸"对（如句 0 与句 2）。这验证了 BERT 的上下文嵌入能区分多义词——同一个词在不同上下文产生不同向量，这是静态嵌入（Word2Vec/GloVe）做不到的。注意：BERT 各向量本身余弦相似度普遍偏高（各向异性），所以看**相对差异**而非绝对值。
+
 **练习 2：** 对比 `[CLS]` 嵌入和 Mean Pooling 在句子相似度任务上的效果。
+
+*参考答案*：
+
+对每句话分别取 `[CLS]` 向量和 mean-pooling 向量，在 STS（语义文本相似度）数据上算与人工分的 Spearman 相关。
+
+```python
+import torch
+
+def cls_embed(out):
+    return out.last_hidden_state[:, 0, :]            # [B, 768]
+
+def mean_embed(out, mask):
+    m = mask.unsqueeze(-1).float()                   # [B, T, 1]
+    summed = (out.last_hidden_state * m).sum(1)      # 只对非 padding 求和
+    return summed / m.sum(1).clamp(min=1e-9)         # [B, 768]
+```
+
+结论：**对未经句向量微调的原生 BERT，Mean Pooling 通常优于 `[CLS]`**。
+
+- 原因：BERT 的 `[CLS]` 是为预训练的 NSP 任务服务的，**没有专门优化成"句子语义摘要"**；直接拿来做相似度往往偏弱，甚至不如简单的词向量平均。Mean Pooling 综合了所有 token 信息，更稳。
+- 重要前提：两者**原生效果都不理想**——直接用 BERT 做句子相似度普遍较差。要做好句向量应使用 **Sentence-BERT**（用孪生网络 + 对比/回归目标微调），它默认就用 mean pooling 并显著超过原生 BERT 的任一种取法。所以这道题的实践启示是：句子相似度别直接用 `[CLS]`，要么 mean pooling，要么直接上 SBERT。
 
 ### 进阶题
 
 **练习 3：** 用 Sentence-BERT 实现一个简单的语义搜索引擎：输入查询，返回最相似的文档。
 
+*参考答案*：
+
+离线把文档编码成向量库，查询时编码 query 再算余弦相似度取 top-k。
+
+```python
+from sentence_transformers import SentenceTransformer, util
+
+class SemanticSearch:
+    """基于 Sentence-BERT 的语义搜索 / SBERT semantic search."""
+    def __init__(self, docs, model_name="all-MiniLM-L6-v2"):
+        self.docs = docs
+        self.model = SentenceTransformer(model_name)
+        # 文档向量库（归一化便于点积=余弦）/ encode corpus once
+        self.doc_emb = self.model.encode(docs, convert_to_tensor=True,
+                                         normalize_embeddings=True)
+
+    def search(self, query: str, top_k: int = 3):
+        q = self.model.encode(query, convert_to_tensor=True,
+                              normalize_embeddings=True)            # [384]
+        scores = util.cos_sim(q, self.doc_emb)[0]                  # [N_docs]
+        top = scores.topk(top_k)
+        return [(self.docs[i], float(s)) for s, i in zip(top.values, top.indices)]
+
+engine = SemanticSearch([
+    "How to learn Python programming?",
+    "Best framework for deep learning",
+    "Where to buy fresh coffee beans",
+])
+print(engine.search("study python coding", top_k=2))
+```
+
+关键点：语义搜索的优势在于**匹配的是含义而非字面**——查询 "study python coding" 能命中 "learn Python programming"，即使没有一个词完全相同，这是 TF-IDF 关键词检索做不到的。文档向量应**离线预计算并缓存**（甚至存入向量数据库如 FAISS/Milvus）；归一化后用点积即等价余弦相似度。规模大时用 ANN 索引把检索从 O(N) 降到近似 O(log N)。
+
 **练习 4：** 对比 BERT 不同层的嵌入在 NER 任务上的表现。提示：浅层更擅长语法，深层更擅长语义。
+
+*参考答案*：
+
+用 `output_hidden_states=True` 拿到全部 13 层（含 embedding 层）的隐状态，逐层冻结取特征 + 训练一个轻量分类头，比较各层在 NER 上的 F1。
+
+```python
+import torch
+from transformers import AutoModel, AutoTokenizer
+
+model = AutoModel.from_pretrained("bert-base-cased",
+                                  output_hidden_states=True).eval()
+
+with torch.no_grad():
+    out = model(**enc)
+# hidden_states: 长度 13 的元组，每个 [B, T, 768]
+# 第 0 层 = 词嵌入，第 1~12 层 = 各 Transformer 层输出
+all_layers = out.hidden_states
+layer_k = all_layers[k]                       # 取第 k 层做 NER 特征
+# 对每个 k：冻结 BERT，仅用 layer_k 训练一个线性/CRF 头，记录 dev F1
+```
+
+预期结论（与 BERT 探针研究一致）：
+- **浅层（靠近输入）**编码更多**表层/句法信息**（词形、词性、局部结构）。
+- **深层**编码更多**语义/上下文信息**（指代、语义角色、词义消歧）。
+- NER 既需要词形线索又需要上下文语义，因此**最佳单层通常落在中高层（约第 9~12 层附近）**，而非最顶层或最底层；纯顶层有时反而偏弱（顶层更偏向预训练目标 MLM）。
+- 工程上更常用的是**拼接或加权多层**（如经典做法：concat 最后 4 层），效果优于任一单层——这也解释了为什么 ELMo 要对各层做加权求和。

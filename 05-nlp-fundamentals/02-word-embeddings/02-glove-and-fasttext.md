@@ -185,10 +185,116 @@ def load_glove_embeddings(path, word2idx, embed_dim=100):
 
 **练习 1：** 对比 Word2Vec、GloVe 和 FastText 在词相似度任务上的表现。
 
+*参考答案*：
+
+用三种预训练向量在同一份"人工标注相似度"数据集（如 WordSim-353、SimLex-999）上算 Spearman 相关系数：模型给出的余弦相似度排序与人工打分排序越一致，相关系数越高。
+
+```python
+import gensim.downloader as api
+from scipy.stats import spearmanr
+
+models = {
+    "word2vec": api.load("word2vec-google-news-300"),
+    "glove": api.load("glove-wiki-gigaword-300"),
+    "fasttext": api.load("fasttext-wiki-news-subwords-300"),
+}
+
+# pairs: List[(w1, w2, human_score)]，来自 WordSim-353 等
+def evaluate(kv, pairs):
+    sys, gold = [], []
+    for w1, w2, h in pairs:
+        if w1 in kv and w2 in kv:                 # 词表内才计入
+            sys.append(kv.similarity(w1, w2)); gold.append(h)
+    return spearmanr(sys, gold).correlation
+
+for name, kv in models.items():
+    print(f"{name}: Spearman = {evaluate(kv, pairs):.3f}")
+```
+
+结论：三者在标准词相似度基准上**表现接近，差距通常很小**，具体高低取决于训练语料和维度，没有绝对赢家。经验上：GloVe 利用全局共现，在词类比/相似度上常与 Word2Vec 相当或略优；FastText 因子词信息在**形态丰富的语言和含罕见词的测试**上更稳，且能给 OOV 词打分（Word2Vec/GloVe 遇到 OOV 直接缺失）。用 Spearman 而非准确率，是因为相似度任务关心的是排序一致性。
+
 **练习 2：** 测试 FastText 对 OOV 词的处理能力。
+
+*参考答案*：
+
+关键验证点：一个训练时**从未出现**的词，FastText 仍能由其字符 n-gram 拼出向量，且与形近词相似。
+
+```python
+from gensim.models import FastText
+
+sentences = [["natural", "language", "processing", "is", "fun"],
+             ["i", "love", "machine", "learning"]] * 100
+ft = FastText(sentences, vector_size=100, window=5, min_count=1,
+              sg=1, min_n=3, max_n=6)
+
+word = "learnings"                                  # 训练集没有这个词
+print(word in ft.wv.key_to_index)                   # False —— 确实是 OOV
+vec = ft.wv[word]                                   # 但仍能得到向量！
+print(vec.shape)                                    # (100,)
+# OOV 词与其形近词相似：learnings 与 learning 子词大量重叠
+print(ft.wv.similarity("learnings", "learning"))    # 相似度较高
+```
+
+原理与结论：FastText 把词表示为其字符 n-gram 向量之和（`<le`,`lea`,...,`ngs>`）。OOV 词 `learnings` 与已知词 `learning` 共享绝大多数子词，因此推断出的向量与 `learning` 高度相似。对比 Word2Vec/GloVe：它们以整词为单位，遇到 OOV 只能返回 KeyError 或 UNK，**完全无法处理**。这正是 FastText 对拼写变体、形态变化、未登录词鲁棒的根本原因。注意：若 OOV 词的所有子词都没在训练中见过，向量质量会下降。
 
 ### 进阶题
 
 **练习 3：** 用 GloVe 预训练向量初始化 LSTM 文本分类模型，对比随机初始化的效果。
 
+*参考答案*：
+
+复用本文 5 节的 `load_glove_embeddings` 把 GloVe 灌进 `nn.Embedding`，再接 LSTM 分类头：
+
+```python
+import torch
+import torch.nn as nn
+
+class GloveLSTM(nn.Module):
+    def __init__(self, glove_weights, hidden, n_cls, freeze=False):
+        super().__init__()
+        # glove_weights: [V, 100]，OOV 行为随机初始化
+        self.embedding = nn.Embedding.from_pretrained(glove_weights, freeze=freeze)
+        self.lstm = nn.LSTM(glove_weights.size(1), hidden, batch_first=True)
+        self.fc = nn.Linear(hidden, n_cls)
+
+    def forward(self, x):                          # x: [B, T]
+        _, (h, _) = self.lstm(self.embedding(x))   # h[-1]: [B, hidden]
+        return self.fc(h[-1])
+
+# 对照组：纯随机初始化
+# rand_emb = nn.Embedding(vocab_size, 100)  # 其余结构相同
+```
+
+对比结论：
+- 在**中小规模标注数据**上，GloVe 初始化通常**更好**——预训练向量已编码全局共现得到的语义，模型起点更高、收敛更快、对训练集未充分覆盖的词泛化更好。
+- 随机初始化要从零学词义，小数据下容易过拟合或学不充分；数据量很大时差距会缩小。
+- 实践：小数据先 `freeze=True`（保护预训练语义、只训上层），再视情况 `freeze=False` 微调；OOV 词用随机行初始化并随训练更新。这与 Word2Vec 初始化的结论一致。
+
 **练习 4：** 分析 FastText 的 subword 分解：查看 "unbelievably" 被分解为哪些子词。
+
+*参考答案*：
+
+FastText 先给词加边界标记 `<` 和 `>`，再对 `<unbelievably>` 滑窗取长度 min_n~max_n 的所有字符 n-gram。
+
+```python
+def char_ngrams(word: str, min_n: int = 3, max_n: int = 6):
+    """复现 FastText 的子词切分 / Reproduce FastText subword split.
+
+    Time: O(len * (max_n - min_n))  Space: O(子词数)
+    """
+    w = f"<{word}>"                                # 加边界标记
+    grams = []
+    for n in range(min_n, max_n + 1):
+        for i in range(len(w) - n + 1):
+            grams.append(w[i:i + n])
+    return grams
+
+for g in char_ngrams("unbelievably", 3, 6):
+    print(g)
+```
+
+以 min_n=3, max_n=6 为例，`<unbelievably>`（含边界共 14 个字符）会被分解为：
+- 3-gram：`<un`, `unb`, `nbe`, `bel`, `eli`, `lie`, `iev`, `eva`, `vab`, `abl`, `bly`, `ly>` …
+- 4/5/6-gram：`<unb`, `unbe`, `nbel` … 直到 `<unbel`, `unbeli` …
+
+**外加整词本身** `<unbelievably>` 也作为一个特殊 token。最终词向量 = 所有这些子词向量之和。关键观察：它包含了 `bel`/`elie`（来自 believe）、`<un`（否定前缀）、`bly`/`ly>`（副词后缀）等有意义的形态片段，所以 FastText 能让 `unbelievable`、`believe`、`believably` 这些同源词通过共享子词获得相近表示。

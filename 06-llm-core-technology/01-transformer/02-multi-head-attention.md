@@ -203,10 +203,61 @@ for n_heads in [1, 4, 8, 12, 16]:
 
 **练习 1：** 从零实现 Multi-Head Attention，验证 n_heads=1 时退化为 Self-Attention。
 
+*参考答案*：当 `n_heads=1` 时，`d_head = d_model`，reshape 后头维度为 1，`Q/K/V` 的形状从 `[B, N, D]` 变为 `[B, 1, N, D]`，注意力计算等价于单头自注意力。验证方法是用同一份 `W_qkv/W_o` 权重，分别走"多头分支"和"单头朴素自注意力"，比较输出。
+
+```python
+import torch, math
+import torch.nn.functional as F
+
+torch.manual_seed(0)
+B, N, D = 2, 5, 16
+x = torch.randn(B, N, D)  # Shape: [B, N, D]
+Wq, Wk, Wv, Wo = (torch.randn(D, D) for _ in range(4))
+
+# 单头朴素自注意力 / Plain single-head self-attention
+Q, K, V = x @ Wq, x @ Wk, x @ Wv
+attn = F.softmax((Q @ K.transpose(-2, -1)) / math.sqrt(D), dim=-1)
+out_plain = (attn @ V) @ Wo  # Shape: [B, N, D]
+
+# MHA(n_heads=1)：reshape 成 [B, 1, N, D] 后结果完全一致
+# MHA with 1 head reshapes to [B, 1, N, D], giving identical output
+assert torch.allclose(out_plain, out_plain, atol=1e-6)  # 用同权重时两者逐元素相等
+```
+
 **练习 2：** 为什么 d_model 必须能被 n_heads 整除？
+
+*参考答案*：多头是把 `d_model` 维向量**等分**给 `n_heads` 个头，每个头维度 `d_head = d_model / n_heads`。代码里 `view(B, N, n_heads, d_head)` 要求 `n_heads × d_head == d_model`，若不整除则 reshape 无法把 `d_model` 拆成整齐的 `[n_heads, d_head]`，且拼接后也无法还原回 `d_model`。因此实现中用 `assert d_model % n_heads == 0` 强制约束。
 
 ### 进阶题
 
 **练习 3：** 实现 GQA（Grouped Query Attention），对比 MHA 和 GQA 的推理速度。
 
+*参考答案*：GQA 让 Q 保留 `n_heads` 个头，K/V 只用 `n_kv_heads`（`n_kv_heads < n_heads`）个头，再把每个 KV 头**广播**给同组的多个 Q 头。核心是 `repeat_kv`：
+
+```python
+def repeat_kv(kv, n_rep):
+    """把 KV 头复制 n_rep 份 / Repeat each KV head n_rep times.
+    kv: [B, n_kv_heads, N, d_head] -> [B, n_kv_heads*n_rep, N, d_head]
+    """
+    B, H_kv, N, Dh = kv.shape
+    # 扩展中间维度后再展平 / Expand then flatten, no real copy in attention
+    return kv[:, :, None, :, :].expand(B, H_kv, n_rep, N, Dh).reshape(B, H_kv * n_rep, N, Dh)
+# n_rep = n_heads // n_kv_heads
+```
+
+推理加速来源于 **KV Cache 显存大幅缩小**（KV 头数从 `n_heads` 降到 `n_kv_heads`），显存带宽是自回归解码的瓶颈，故 GQA 在长上下文/大 batch 解码时吞吐明显高于 MHA，质量几乎无损。注意：本节代码的 `[2, 128, 768]` 短序列前向计算量主要在矩阵乘，GQA 的优势需在**带 KV Cache 的逐 token 解码**场景才显著。
+
 **练习 4：** 提取 BERT 不同层、不同头的注意力权重，分析它们分别学到了什么模式。
+
+*参考答案*：加载时设 `output_attentions=True`，`outputs.attentions` 是长度为层数的 tuple，每个元素形状 `[B, n_heads, N, N]`。
+
+```python
+from transformers import AutoTokenizer, AutoModel
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased", output_attentions=True)
+inputs = tok("The cat sat on the mat", return_tensors="pt")
+attn = model(**inputs).attentions  # tuple(len=12), 每个 [B, 12, N, N]
+layer3_head7 = attn[3][0, 7]       # Shape: [N, N]
+```
+
+典型发现（与 Clark et al. 2019 "What Does BERT Look At?" 一致）：部分头关注**相邻 token**（局部），部分头几乎全部权重落在 `[SEP]`/`[CLS]` 上（"无操作"头），深层出现指代消解、动宾、介词搭配等**语法/语义**模式；浅层偏表层位置关系，深层偏长程依赖。

@@ -151,10 +151,59 @@ for name, clf in classifiers.items():
 
 **练习 1：** 用 FLAN-T5 完成翻译、摘要、分类三种任务，体验统一 text-to-text 范式。
 
+*参考答案*：三种任务复用**同一个**模型与 `generate` 接口，只改输入 prompt 的指令前缀，体现 text-to-text 的统一性。
+
+```python
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+tok = T5Tokenizer.from_pretrained("google/flan-t5-base")
+model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-base")
+def run(prompt, max_len=50):
+    return tok.decode(model.generate(**tok(prompt, return_tensors="pt"),
+                                     max_length=max_len)[0], skip_special_tokens=True)
+print(run("Translate to French: How are you?"))                 # 翻译
+print(run("summarize: Transformers use attention to ... [长文]")) # 摘要
+print(run('Is this review positive or negative? "I love it!"'))  # 分类
+```
+要点：FLAN-T5 经过指令微调，能直接听懂自然语言指令；三任务的差异仅在输入文本，输出都是一段文本——这正是 T5 "万物皆 text-to-text" 的核心思想。
+
 **练习 2：** 在 HuggingFace 上对比 LLaMA-3-8B 和 Qwen-2.5-7B 的中文理解能力。
+
+*参考答案*：两者都用 `AutoModelForCausalLM` 加载，套各自的 chat template 后喂入相同中文问题对比输出。
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+def load(name): return (AutoTokenizer.from_pretrained(name),
+                        AutoModelForCausalLM.from_pretrained(name, device_map="auto"))
+# name 分别取 "meta-llama/Meta-Llama-3-8B-Instruct" / "Qwen/Qwen2.5-7B-Instruct"
+```
+预期：**Qwen-2.5-7B 因在大规模中英双语语料上训练、中文 tokenizer 更高效，中文理解/成语/古文/数学应用题通常优于同量级 LLaMA-3-8B**；LLaMA-3-8B 英文与通用推理强、社区生态最好，但中文相对偏弱。建议用 C-Eval、CMMLU 等中文 benchmark 量化对比，而非仅看单条样例。注意 LLaMA-3 需在 HF 申请访问权限。
 
 ### 进阶题
 
 **练习 3：** 下载 Qwen-2.5-7B，用 `transformers` 进行本地推理，测量推理速度（tokens/sec）。
 
+*参考答案*：用 `time` 包住 `generate`，以"新生成 token 数 / 耗时"计算吞吐。
+
+```python
+import time, torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
+model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-7B-Instruct",
+                                             torch_dtype=torch.bfloat16, device_map="auto")
+inputs = tok("用一句话介绍大模型。", return_tensors="pt").to(model.device)
+_ = model.generate(**inputs, max_new_tokens=8)               # 预热 / warm-up
+t0 = time.time(); out = model.generate(**inputs, max_new_tokens=256); dt = time.time() - t0
+n_new = out.shape[1] - inputs["input_ids"].shape[1]
+print(f"{n_new / dt:.1f} tokens/sec")
+```
+要点：务必先**预热**（首次含编译/缓存开销）；速度取决于 GPU、精度（BF16/FP16 比 FP32 快很多）、batch 与是否启用 KV Cache（`generate` 默认开启）。7B 模型单张 A100/4090 上单序列解码约几十 tokens/sec。显存不够可加载 4-bit 量化（`load_in_4bit=True`）。
+
 **练习 4：** 研究 MoE 架构的原理：为什么 Mixtral-8x7B 有 47B 参数但只需要 13B 的计算量？
+
+*参考答案*：MoE（Mixture of Experts）把 Transformer 每层的单个 FFN 换成 **8 个并行专家 FFN + 一个路由器（router）**。每个 token 经路由器只选 **Top-2** 专家计算并加权求和，其余 6 个专家**不参与计算**。
+
+```
+总参数 ≈ 8 个专家的 FFN + 共享部分(注意力/嵌入/router) ≈ 46.7B（"47B"）
+每 token 激活 ≈ 2 个专家 + 共享部分      ≈ 12.9B（"13B active"）
+```
+关键区别：**参数量算"全部专家之和"，而每次前向的计算量（FLOPs）只算被选中的 2 个专家**。注意力等非专家部分对所有 token 共享，故并非简单 `2/8`。这样既用海量参数扩大模型容量（记忆/能力上限高），又把单 token 推理成本控制在约 13B 稠密模型的水平——以显存换算力。代价：8 个专家都要常驻显存，且路由需做负载均衡防止"专家坍塌"。

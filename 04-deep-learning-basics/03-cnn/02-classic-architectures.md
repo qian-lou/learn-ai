@@ -227,10 +227,122 @@ class BottleneckBlock(nn.Module):
 
 **练习 1：** 解释 ResNet 论文中的观察：56 层的 plain network 比 20 层的表现更差，这不是过拟合（训练误差也更高）。这说明了什么？
 
+*参考答案*：
+
+这说明问题是**优化困难（degradation problem）**，而非过拟合或表达能力不足。
+
+- 过拟合的特征是"训练误差低、测试误差高"；而这里 56 层连**训练误差**都更高，所以不是过拟合。
+- 表达能力也不是瓶颈：56 层网络理论上可以表示 20 层网络的解（多出的 36 层只要学成恒等映射 identity，就退化为 20 层），所以 56 层的最优解不可能比 20 层差。
+- 唯一的解释是：**SGD 难以让普通堆叠层学到恒等映射**。深层网络梯度传播不畅，优化器找不到那个"至少不更差"的解。
+- ResNet 的对策：把映射改写为 `H(x) = F(x) + x`，让"学恒等映射"变成"把残差 F(x) 学成 0"——后者对优化器容易得多（权重趋近 0 即可），从而解决退化问题。
+
 **练习 2：** 用 `torchvision.models.resnet18(pretrained=True)` 对 CIFAR-10 做迁移学习，只训练最后的全连接层。
+
+*参考答案*：
+
+```python
+import torch
+import torch.nn as nn
+import torchvision
+import torchvision.transforms as T
+import torchvision.models as models
+from torch.utils.data import DataLoader
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# ImageNet 预训练要求 224×224 输入与 ImageNet 归一化
+# Pretrained model expects 224x224 + ImageNet normalization
+tf = T.Compose([
+    T.Resize(224),
+    T.ToTensor(),
+    T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+])
+train_set = torchvision.datasets.CIFAR10('./data', train=True, download=True, transform=tf)
+loader = DataLoader(train_set, batch_size=128, shuffle=True, num_workers=4)
+
+model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+# 1. 冻结全部 backbone / Freeze backbone
+for p in model.parameters():
+    p.requires_grad = False
+# 2. 替换分类头（新层默认 requires_grad=True）/ Replace head
+model.fc = nn.Linear(model.fc.in_features, 10)
+model = model.to(device)
+
+# 3. 只把 fc 参数交给优化器 / Only optimize the head
+optimizer = torch.optim.Adam(model.fc.parameters(), lr=1e-3)
+criterion = nn.CrossEntropyLoss()
+
+for epoch in range(5):
+    model.train()
+    for x, y in loader:
+        x, y = x.to(device), y.to(device)
+        optimizer.zero_grad()
+        loss = criterion(model(x), y)
+        loss.backward()
+        optimizer.step()
+```
+
+要点：冻结 backbone 后只训练 `model.fc`，仅几千个参数即可，速度快、不易过拟合；务必把输入 resize 到 224 并用 ImageNet 的均值/方差归一化，否则与预训练分布不匹配会严重掉点。
 
 ### 进阶题
 
 **练习 3：** 实现 Pre-Norm 版本的残差连接（Transformer 常用）：`output = x + F(LayerNorm(x))`，对比 Post-Norm 版本的训练稳定性。
 
+*参考答案*：
+
+```python
+import torch.nn as nn
+
+class PreNormBlock(nn.Module):
+    """Pre-Norm: output = x + F(LayerNorm(x))."""
+    def __init__(self, dim: int):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+        self.ff = nn.Sequential(nn.Linear(dim, dim), nn.ReLU(), nn.Linear(dim, dim))
+
+    def forward(self, x):  # x: [B, T, dim]
+        return x + self.ff(self.norm(x))   # 归一化在残差分支内部 / norm inside branch
+
+class PostNormBlock(nn.Module):
+    """Post-Norm: output = LayerNorm(x + F(x)) —— 原始 Transformer."""
+    def __init__(self, dim: int):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+        self.ff = nn.Sequential(nn.Linear(dim, dim), nn.ReLU(), nn.Linear(dim, dim))
+
+    def forward(self, x):
+        return self.norm(x + self.ff(x))   # 归一化在残差相加之后 / norm after add
+```
+
+稳定性对比（结论）：
+- **Pre-Norm 更稳**。残差通路 `x` 完全不经过 LayerNorm，是一条干净的恒等高速公路，深层堆叠时梯度不衰减，常常**无需 warmup** 就能训练几十上百层。
+- **Post-Norm** 的恒等通路被 LayerNorm 包裹，深层时输出方差随层数累积放大，需要**学习率 warmup + 仔细初始化**才能稳定，但收敛后峰值效果有时略高。
+- 现代大模型（GPT 系列等）几乎都采用 Pre-Norm，正是为了堆叠深层时的训练稳定性。
+
 **练习 4：** 计算 ResNet-50 的总参数量和总 FLOPs（对于 224×224 输入）。
+
+*参考答案*：
+
+ResNet-50 的公认数值（来自原论文及标准统计）：
+- **参数量 ≈ 25.6 M（约 2560 万）**
+- **FLOPs ≈ 4.1 GFLOPs**（224×224 输入，统计一次前向的乘加，常记为 ~3.8–4.1 GFLOPs，口径不同略有差异）
+
+不必手算，直接用工具核对即可：
+
+```python
+import torchvision.models as models
+from thop import profile          # pip install thop
+import torch
+
+model = models.resnet50()
+# 参数量 / Parameter count
+n_params = sum(p.numel() for p in model.parameters())
+print(f"Params: {n_params/1e6:.1f} M")          # ≈ 25.6 M
+
+# FLOPs（thop 统计 MACs，乘加各算一次）/ FLOPs
+x = torch.randn(1, 3, 224, 224)   # Shape: [B, C, H, W]
+macs, params = profile(model, inputs=(x,), verbose=False)
+print(f"MACs: {macs/1e9:.2f} G")  # ≈ 4.1 G (FLOPs≈2×MACs，业界常直接报 MACs)
+```
+
+说明：业界口径常把一次 MAC（乘加）记作 1 FLOP，因此 ResNet-50 常被报为 "~4 GFLOPs"。Bottleneck 结构用 1×1 卷积降/升维，正是为了在加深到 50 层时把 FLOPs 控制在 ~4G 这个量级。

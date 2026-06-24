@@ -196,10 +196,107 @@ model = Seq2Seq(encoder, decoder, device)
 
 **练习 1：** 实现一个 Seq2Seq 模型完成序列反转任务（输入 [1,2,3]，输出 [3,2,1]）。
 
+*参考答案*：
+
+直接复用本文 3.2 节的 `Encoder/Decoder/Seq2Seq`，只需准备"反转"数据并训练：
+
+```python
+import torch
+import torch.nn as nn
+
+PAD, BOS, EOS = 0, 10, 11          # 0-9 是数字, 10/11 是特殊符
+V = 12
+
+def make_batch(batch=64, length=5):
+    """生成 (src, tgt)：tgt 是 src 数字段的反转 / build reversal pairs."""
+    digits = torch.randint(0, 10, (batch, length))      # [B, L]
+    src = torch.cat([digits, torch.full((batch, 1), EOS)], 1)        # [B, L+1]
+    rev = torch.flip(digits, dims=[1])                  # 反转数字段
+    tgt = torch.cat([torch.full((batch, 1), BOS), rev,
+                     torch.full((batch, 1), EOS)], 1)   # [B, L+2]: BOS rev EOS
+    return src, tgt
+
+device = torch.device('cpu')
+model = Seq2Seq(Encoder(V, 32, 64), Decoder(V, 32, 64), device)
+opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+crit = nn.CrossEntropyLoss(ignore_index=PAD)
+
+for step in range(2000):
+    src, tgt = make_batch()
+    logits = model(src, tgt, teacher_forcing_ratio=0.5)   # [B, T, V]
+    # 用 tgt[:,1:] 作为标签（错位一位）/ shift target by one
+    loss = crit(logits[:, 1:].reshape(-1, V), tgt[:, 1:].reshape(-1))
+    opt.zero_grad(); loss.backward(); opt.step()
+```
+
+要点：序列反转是验证 Seq2Seq 是否跑通的经典 toy task，模型必须把整段输入"记住"后再倒序吐出，正好考验 context vector 的承载能力；损失计算时目标要**错位一位**（用 `tgt[:,1:]`，因为第 0 位是 BOS 输入而非预测目标），并用 `ignore_index` 跳过 PAD。短序列上很快能达到接近 100% 的正确率。
+
 **练习 2：** 解释 Teacher Forcing 的优缺点，以及 Exposure Bias 问题。
+
+*参考答案*：
+
+**Teacher Forcing（训练时用真实目标 yₜ₋₁ 作为下一步输入）：**
+
+优点：
+- **收敛快、训练稳定**：每一步的输入都是正确的，模型不会因前一步预测错误而让后续输入全盘崩坏。
+- **可并行/高效**：标签已知，训练时不依赖上一步的采样结果（在 Transformer 中整条序列可一次并行算完）。
+
+缺点：
+- **训练-推理不一致**：训练时喂的是"真实历史"，推理时只能喂"模型自己生成的历史"，两种分布不同。
+
+**Exposure Bias（曝光偏差）：**
+- 定义：模型在训练中**从未见过自己生成的（可能有误的）前缀**，只见过真实前缀；推理时一旦某步预测错误，就进入了训练时没暴露过的状态分布，模型不知如何纠正，导致**误差沿序列累积、越错越离谱**。
+- 这正是"训练用真实目标、推理用预测结果"带来的根本矛盾。
+
+**常见缓解手段：**
+- **Scheduled Sampling**：训练中以一定概率（如本文的 `teacher_forcing_ratio`）改用模型自己的预测作为输入，让模型提前适应自身错误，并在训练过程中逐步降低该概率。
+- 序列级训练目标（如最小化风险 / RL with BLEU 等）直接在生成序列上优化。
+- Transformer 时代曝光偏差影响相对减弱（强语言建模 + beam search 部分缓解），但本质问题依然存在。
 
 ### 进阶题
 
 **练习 3：** 对比不同 teacher_forcing_ratio（0.0, 0.5, 1.0）对训练效果的影响。
 
+*参考答案*：
+
+固定模型与数据，只改 `teacher_forcing_ratio`，记录收敛速度（训练 loss 曲线）和**推理时**（全自回归，ratio=0）的序列准确率。
+
+| ratio | 训练表现 | 推理表现 | 说明 |
+|-------|---------|---------|------|
+| **1.0**（全用真实）| 收敛**最快**、训练 loss 最低 | 受 **Exposure Bias** 影响，推理时易累积误差，泛化可能偏弱 | 训练/推理差距最大 |
+| **0.0**（全自回归）| 收敛**最慢**，早期一步错步步错，训练困难甚至学不动 | 训练即推理，无分布差距，但因训练太难效果未必好 | 难优化 |
+| **0.5**（混合）| 收敛较快且较稳 | **通常最佳**：兼顾"训练好优化"和"提前暴露自身错误" | 实践常用折中 |
+
+结论：`ratio=1.0` 训练最快但最易曝光偏差；`ratio=0.0` 最贴近推理却最难训练；**中间值（如 0.5，即 Scheduled Sampling）往往综合最好**。进一步常用做法是**从高 ratio 退火到低 ratio**——前期多用真实目标快速学到基本能力，后期多用自身预测来适应推理分布。最终评估一定要在 `ratio=0`（真实推理设置）下进行，否则会高估模型。
+
 **练习 4：** 将 Encoder 改为 Bidirectional LSTM，观察翻译质量的变化。
+
+*参考答案*：
+
+双向 Encoder 的关键是处理两个维度变化：(1) 输出维度变成 `2*H`；(2) 前后向各有一份 (h, c)，要合并后再交给单向 Decoder。
+
+```python
+import torch
+import torch.nn as nn
+
+class BiEncoder(nn.Module):
+    """双向 LSTM 编码器 / Bidirectional LSTM Encoder."""
+    def __init__(self, vocab_size, embed_dim, hidden_dim):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True,
+                            bidirectional=True)
+        # 把 2*H 投影回 H，供单向 Decoder 使用 / project 2H -> H
+        self.bridge_h = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.bridge_c = nn.Linear(hidden_dim * 2, hidden_dim)
+
+    def forward(self, src):                          # src: [B, src_len]
+        emb = self.embedding(src)
+        outputs, (h, c) = self.lstm(emb)             # outputs: [B, L, 2H]; h/c: [2, B, H]
+        # 拼接前向(h[0])与后向(h[1]) 再投影 / concat both directions
+        h = torch.tanh(self.bridge_h(torch.cat([h[0], h[1]], 1))).unsqueeze(0)  # [1,B,H]
+        c = torch.tanh(self.bridge_c(torch.cat([c[0], c[1]], 1))).unsqueeze(0)  # [1,B,H]
+        return outputs, (h, c)
+```
+
+质量变化与原因：**通常翻译/序列任务质量提升**。单向 Encoder 编码位置 t 时只看过 `x₁..xₜ`；双向则同时看到**左右两侧的完整上下文**，每个位置的表示信息更充分（这正是 BERT 双向优于 GPT 单向理解的同款直觉）。代价：参数和计算约翻倍，且必须把双向的 (h,c) 合并维度匹配 Decoder。注意 Decoder 仍须保持单向（自回归生成不能看未来）。配合 Attention 时，Encoder 的 `[B, L, 2H]` 输出还能作为更丰富的 attention 记忆，收益更明显。

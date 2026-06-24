@@ -157,10 +157,75 @@ for batch in dataloader:
 
 **练习 1：** 加载 IMDB 数据集，完成分词预处理，构建 DataLoader。
 
+*参考答案*：
+
+```python
+from datasets import load_dataset
+from transformers import AutoTokenizer
+from torch.utils.data import DataLoader
+
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+ds = load_dataset("imdb", split="train[:5000]")
+# batched=True 向量化分词，比逐条快 10-100x / batched tokenization is 10-100x faster
+ds = ds.map(lambda x: tok(x["text"], truncation=True, padding="max_length",
+                          max_length=256), batched=True)
+ds.set_format("torch", columns=["input_ids", "attention_mask", "label"])
+loader = DataLoader(ds, batch_size=16, shuffle=True)
+print(next(iter(loader))["input_ids"].shape)  # [16, 256]
+```
+
 **练习 2：** 用流式方式加载 C4 数据集，统计前 10000 条数据的平均长度。
+
+*参考答案*：
+
+```python
+from datasets import load_dataset
+from itertools import islice
+
+# streaming=True 返回迭代器，不下载全量、不会 OOM / streaming yields an iterator, no OOM
+stream = load_dataset("allenai/c4", "en", split="train", streaming=True)
+total, n = 0, 10000
+for ex in islice(stream, n):  # islice 只取前 n 条 / take first n examples
+    total += len(ex["text"])
+print(f"平均字符长度 / avg char length: {total / n:.1f}")
+```
 
 ### 进阶题
 
 **练习 3：** 创建一个自定义的指令微调数据集（Alpaca 格式），上传到 HuggingFace Hub。
 
+*参考答案*：
+
+```python
+from datasets import Dataset
+
+# Alpaca 三字段：instruction / input / output / Alpaca's three fields
+data = [
+    {"instruction": "翻译成英文", "input": "今天天气很好", "output": "The weather is nice today."},
+    {"instruction": "用一句话总结", "input": "深度学习是机器学习的子领域……", "output": "深度学习是基于神经网络的机器学习方法。"},
+]
+ds = Dataset.from_list(data)
+# 需先 `huggingface-cli login` / requires CLI login first
+ds.push_to_hub("your-username/my-alpaca-dataset")
+```
+
 **练习 4：** 对比 `datasets.map(batched=True)` 和逐条处理的速度差异。
+
+*参考答案*：
+
+```python
+import time
+from datasets import load_dataset
+from transformers import AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+ds = load_dataset("imdb", split="train[:2000]")
+
+t0 = time.perf_counter()
+ds.map(lambda x: tok(x["text"], truncation=True), batched=False)  # 逐条 / per-row
+t1 = time.perf_counter()
+ds.map(lambda x: tok(x["text"], truncation=True), batched=True)   # 批量 / batched
+t2 = time.perf_counter()
+# batched 通常快一个数量级 / batched is typically an order of magnitude faster
+print(f"逐条 {t1 - t0:.2f}s vs 批量 {t2 - t1:.2f}s")
+```

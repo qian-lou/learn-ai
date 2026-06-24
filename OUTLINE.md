@@ -68,7 +68,7 @@
 │   ├── 04-groupby-and-aggregation.md            # 分组与聚合（SQL 对比）
 │   └── 05-merge-and-join.md                     # 合并与连接（JOIN 对比）
 └── 03-matplotlib/
-    ├── 01-basic-plotting.md                     # 基础绑图（折线/柱状/散点）
+    ├── 01-basic-plotting.md                     # 基础绘图（折线/柱状/散点）
     ├── 02-subplot-and-layout.md                 # 子图与布局
     └── 03-seaborn-advanced.md                   # Seaborn 高级可视化
 ```
@@ -159,46 +159,39 @@
 07-llm-applications/
 ├── 01-huggingface/
 │   ├── 01-transformers-library.md               # Transformers 库入门
-│   ├── 02-tokenizers.md                         # Tokenizers 分词器
-│   ├── 03-datasets-and-evaluate.md              # Datasets 与 Evaluate 库
-│   └── 04-model-hub.md                          # Model Hub 使用
+│   ├── 02-datasets.md                           # Datasets 库入门与实战
+│   └── 03-trainer-api.md                        # Trainer API 微调实战
 ├── 02-prompt-engineering/
 │   ├── 01-prompt-basics.md                      # Prompt 基础与原则
-│   ├── 02-few-shot-and-cot.md                   # Few-shot 与 Chain-of-Thought
-│   └── 03-prompt-optimization.md                # Prompt 优化与评估
+│   └── 02-advanced-techniques.md                # 高级 Prompt 技巧（CoT/ReAct/多轮对话）
 ├── 03-rag/
-│   ├── 01-vector-database.md                    # 向量数据库（FAISS/Milvus/Chroma）
-│   ├── 02-embedding-models.md                   # Embedding 模型选择
-│   ├── 03-rag-pipeline.md                       # RAG 流水线构建
-│   └── 04-advanced-rag.md                       # 高级 RAG 技术
+│   ├── 01-rag-basics.md                         # RAG 原理与基础检索
+│   ├── 02-vector-databases.md                   # 向量数据库选择与使用
+│   └── 03-rag-practice.md                       # 端到端 RAG 应用实战
 ├── 04-fine-tuning/
-│   ├── 01-full-fine-tuning.md                   # 全参数微调
-│   ├── 02-lora-and-qlora.md                     # LoRA 与 QLoRA
-│   ├── 03-peft-library.md                       # PEFT 库实战
-│   └── 04-instruction-tuning.md                 # 指令微调（SFT）
+│   ├── 01-lora-qlora.md                         # LoRA 与 QLoRA 参数高效微调
+│   └── 02-instruction-tuning.md                 # 指令微调（SFT）实战
 └── 05-langchain/
-    ├── 01-langchain-basics.md                   # LangChain 核心概念
-    ├── 02-chains-and-agents.md                  # Chains 与 Agents
-    ├── 03-memory-and-tools.md                   # Memory 与工具集成
-    └── 04-full-application.md                   # 完整应用开发实战
+    ├── 01-langchain-basics.md                   # LangChain 核心组件与 LCEL
+    ├── 02-agents-and-tools.md                   # Agents 代理与自定义 Tool 集成
+    └── 03-full-application.md                   # 完整 LLM 应用开发实战
 ```
 
 ### 阶段八：大模型部署与工程化
 ```
 08-llm-engineering/
 ├── 01-model-optimization/
-│   ├── 01-quantization.md                       # 模型量化（INT8/INT4/GPTQ/AWQ）
-│   ├── 02-pruning-and-distillation.md           # 剪枝与知识蒸馏
-│   └── 03-inference-optimization.md             # 推理优化（KV Cache/FlashAttention）
+│   ├── 01-quantization.md                       # 模型量化（GPTQ/AWQ/GGUF）
+│   ├── 02-inference-acceleration.md             # 推理加速技术（KV Cache/FlashAttention）
+│   └── 03-knowledge-distillation.md             # 知识蒸馏与轻量化
 ├── 02-model-serving/
-│   ├── 01-vllm.md                               # vLLM 部署
-│   ├── 02-triton-inference-server.md            # Triton 推理服务器
-│   ├── 03-api-design.md                         # API 设计（OpenAI-compatible）
-│   └── 04-scaling-and-monitoring.md             # 扩缩容与监控
+│   ├── 01-vllm-tgi.md                           # 高并发推理服务部署（vLLM/TGI）
+│   ├── 02-api-service.md                        # FastAPI 包装 OpenAI 兼容接口
+│   └── 03-docker-deployment.md                  # Docker 容器化部署
 └── 03-mlops/
     ├── 01-experiment-tracking.md                # 实验追踪（MLflow/W&B）
-    ├── 02-data-pipeline.md                      # 数据流水线
-    └── 03-cicd-for-ml.md                        # ML 项目 CI/CD
+    ├── 02-evaluation-and-monitoring.md          # 模型评估与在线监控
+    └── 03-cicd.md                               # 大模型项目 CI/CD 流程
 ```
 
 ---

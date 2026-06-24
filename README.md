@@ -73,7 +73,7 @@
 
 ### 特色
 
-- 🔄 **Java 对比视角** — 每个概念都映射到 Java 工程师熟悉的模式（如 Agent ≈ Controller，Pipeline ≈ 责任链）
+- 🔄 **Java 对比视角** — 多数概念映射到 Java 工程师熟悉的模式（如 Agent ≈ Controller，Pipeline ≈ 责任链）；基础阶段对比最充分，进阶主题侧重底层原理
 - 📐 **代码注释双语** — 中英文双语注释，含算法复杂度和 Shape 标注
 - 🎯 **工程导向** — 不止理论，覆盖生产环境所需的优化、部署和监控实践
 - 📊 **渐进式难度** — 从 `np.array` 到 `torch.einsum`，从线性回归到 LoRA 微调
@@ -129,7 +129,7 @@ learn-ai/
 ├── 02-data-science-fundamentals/       # 阶段二：数据科学
 │   ├── 01-numpy/                       #   ndarray/索引/广播/线性代数/性能
 │   ├── 02-pandas/                      #   DataFrame/IO/清洗/分组/合并
-│   └── 03-matplotlib/                  #   基础绑图/子图/Seaborn
+│   └── 03-matplotlib/                  #   基础绘图/子图/Seaborn
 ├── 03-machine-learning-basics/         # 阶段三：机器学习
 │   ├── 01-math-foundations/            #   线性代数/概率/微积分
 │   ├── 02-classic-algorithms/          #   回归/树/SVM/聚类/评估
@@ -146,7 +146,7 @@ learn-ai/
 ├── 06-llm-core-technology/             # 阶段六：大模型核心
 │   ├── 01-transformer/                 #   Self-Attention/MHA/位置编码/架构/实现
 │   ├── 02-pretrained-models/           #   BERT/GPT/T5/Scaling Laws
-│   └── 03-training-techniques/         #   分布式/混合精度/RLHF/DPO
+│   └── 03-training-techniques/         #   预训练策略/分布式训练/RLHF+DPO
 ├── 07-llm-applications/                # 阶段七：大模型应用
 │   ├── 01-huggingface/                 #   Transformers/Datasets/Trainer
 │   ├── 02-prompt-engineering/          #   基础/CoT/ReAct/Self-Consistency

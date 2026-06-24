@@ -121,10 +121,69 @@ out = torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)
 
 **练习 1：** 对比开启/关闭 KV Cache 的推理速度。
 
+*参考答案*：
+
+```python
+import time, torch
+
+def timed(use_cache):
+    t = time.time()
+    model.generate(**inputs, max_new_tokens=200, use_cache=use_cache)
+    return time.time() - t
+
+# use_cache=False 每步都重算全部历史 K/V → O(N²)
+# use_cache=False recomputes all history K/V each step → O(N²)
+print("cache on :", timed(True))   # 关闭后明显变慢
+print("cache off:", timed(False))  # generation 长度越大差距越大
+```
+
+结论：开启 KV Cache 后单步只计算新 token 的 K/V，时间复杂度从约 O(N²) 降到 O(N)；序列越长，加速越明显（数倍到数量级）。代价是显存换时间。
+
 **练习 2：** 计算 LLaMA-70B 在 seq_len=4096 时的 KV Cache 大小。
+
+*参考答案*：
+
+公式：`2 × n_layers × n_kv_heads × d_head × seq_len × batch × dtype_size`。
+
+LLaMA-2-70B 用 GQA，`n_layers=80`，`n_kv_heads=8`（注意不是 64 个 query head），`d_head=128`，FP16=2 字节，batch=1：
+
+```
+2 × 80 × 8 × 128 × 4096 × 1 × 2 B
+= 1,342,177,280 B ≈ 1.25 GB
+```
+
+要点：必须用 **KV head 数（GQA 下为 8）** 而非 query head 数，否则会高估 8 倍。若误按 MHA（64 头）算则约 10 GB——这正是 GQA 大幅节省 KV Cache 的原因。
 
 ### 进阶题
 
 **练习 3：** 用 PyTorch 的 `scaled_dot_product_attention` 替换手写 attention。
 
+*参考答案*：
+
+```python
+import torch.nn.functional as F
+
+# 手写版（教学，慢且占显存）/ hand-written (slow, memory-heavy)
+def naive_attn(q, k, v):
+    w = (q @ k.transpose(-2, -1)) / q.size(-1) ** 0.5
+    return F.softmax(w, dim=-1) @ v
+
+# SDPA：自动选择 FlashAttention / 内存高效后端，内部完成缩放与 causal mask
+# SDPA: auto-picks FlashAttention/mem-efficient backend; scaling + mask built-in
+def sdpa_attn(q, k, v):
+    return F.scaled_dot_product_attention(q, k, v, is_causal=True)
+# 形状均为 [B, n_heads, seq, d_head] / shapes: [B, H, S, D]
+```
+
+要点：SDPA 内部已做 1/√d 缩放，**不要**再手动除；`is_causal=True` 替代手写下三角 mask；fp16/bf16 + 满足对齐时自动走 FlashAttention，显存从 O(N²) 降到 O(N)。
+
 **练习 4：** 研究 vLLM 的 PagedAttention 原理，理解虚拟内存管理思想。
+
+*参考答案*：
+
+核心类比——操作系统虚拟内存的"分页"：
+
+- **痛点**：传统按 `max_len` 为每个请求预留连续 KV Cache，实际长度远小于上限，造成大量内部碎片，显存利用率常仅 ~30%。
+- **做法**：把 KV Cache 切成固定大小的 **block（页）**，逻辑序列经 **block table（页表）** 映射到物理 block，**非连续**存放，按需分配，几乎无碎片。
+- **收益**：(1) 利用率提升到 90%+，可容纳更大 batch；(2) 相同前缀的请求共享物理 block，即 **Prefix Caching**；(3) 与 continuous batching 协同，吞吐提升数倍。
+- **延伸**：同源思想还支撑 beam search 的 copy-on-write，以及 2026 年常见的投机解码（speculative decoding）等优化。可读 vLLM 论文与源码 `block_manager` 验证理解。

@@ -236,10 +236,72 @@ print(f"参数量: {params:,}")
 
 **练习 1：** 画出 BERT、GPT、T5 三种模型的架构差异图。
 
+*参考答案*：核心差异在于用了 Transformer 的哪部分以及注意力的方向：
+
+```
+BERT（Encoder-only，双向）:
+  [Embedding+PE] → N×[双向 Self-Attn → Add&Norm → FFN → Add&Norm] → 任务头
+  每个 token 能看到左右全部上下文，适合理解类任务。
+
+GPT（Decoder-only，单向/因果）:
+  [Embedding+PE] → N×[Masked Self-Attn → Add&Norm → FFN → Add&Norm] → LM Head
+  因果掩码使 token 只能看左侧，天然支持自回归生成。
+
+T5（Encoder-Decoder）:
+  Encoder: N×[双向 Self-Attn → FFN]
+  Decoder: N×[Masked Self-Attn → Cross-Attn(Q=Dec, K/V=Enc) → FFN] → LM Head
+  Encoder 双向编码源序列，Decoder 因果生成并通过 Cross-Attn 读取 Encoder 输出。
+```
+关键区别一句话：BERT 无掩码、GPT 有因果掩码且无 Encoder、T5 两者皆有并多出 Cross-Attention。
+
 **练习 2：** 计算 LLaMA-7B（32 层，d=4096，d_ff=11008）的参数量。
+
+*参考答案*：按本节 4.1 的公式，单层 = 注意力 `4·d²` + FFN `2·d·d_ff`（RMSNorm 的两个缩放参数共 `2d`，量级可忽略）。
+
+```
+注意力/层: 4 × 4096²            = 67,108,864
+FFN/层(标准2矩阵): 2 × 4096 × 11008 = 90,177,536
+单层 ≈ 1.572 亿；32 层 ≈ 5.03B
+词嵌入(与输出权重共享): 32000 × 4096 ≈ 0.131B
+合计 ≈ 5.16B（标准 FFN 估算）
+```
+注意：真实 LLaMA-7B 的 FFN 用 **SwiGLU，有 3 个权重矩阵**（gate/up/down，每个约 `d×d_ff`），FFN/层 ≈ `3 × 4096 × 11008 ≈ 0.135B`，32 层叠加后总参数才达到官方的 **≈6.7B**。若只按本节给的两矩阵 FFN 公式计算约 5.0–5.2B，需说明 SwiGLU 的差异。
 
 ### 进阶题
 
 **练习 3：** 实现 Pre-Norm 和 Post-Norm 两种 TransformerBlock，对比训练稳定性。
 
+*参考答案*：两者只差 LayerNorm 的位置：
+
+```python
+def post_norm(x, attn, ffn, ln1, ln2):
+    # 原始 Transformer：先残差相加再归一化 / Norm AFTER residual add
+    x = ln1(x + attn(x))
+    x = ln2(x + ffn(x))
+    return x
+
+def pre_norm(x, attn, ffn, ln1, ln2):
+    # GPT-2/LLaMA：先归一化再进子层，残差路径"干净" / Norm BEFORE sublayer
+    x = x + attn(ln1(x))
+    x = x + ffn(ln2(x))
+    return x
+```
+稳定性差异：Pre-Norm 的残差主干上没有归一化，恒等路径让梯度直达底层，深层（数十到上百层）也能稳定收敛，且**通常无需 learning-rate warmup**；Post-Norm 把归一化压在残差之上，深层易梯度爆炸/消失，必须配合 warmup 与小心调参。对比实验中堆到 ~24+ 层时，Post-Norm 的 loss 更易发散，这也是现代大模型几乎全用 Pre-Norm 的原因。
+
 **练习 4：** 用 SwiGLU 替换标准 FFN，对比模型效果。
+
+*参考答案*：标准 FFN 为 `W₂·GELU(W₁x)`（2 个矩阵）；SwiGLU 引入门控：`W₂·(Swish(W_gate·x) ⊙ (W_up·x))`，共 3 个矩阵。
+
+```python
+import torch.nn as nn, torch.nn.functional as F
+class SwiGLU(nn.Module):
+    def __init__(self, d_model, d_ff):
+        super().__init__()
+        self.w_gate = nn.Linear(d_model, d_ff, bias=False)
+        self.w_up   = nn.Linear(d_model, d_ff, bias=False)
+        self.w_down = nn.Linear(d_ff, d_model, bias=False)
+    def forward(self, x):  # x: [B, N, d_model]
+        # Swish(gate) ⊙ up，门控选择性放行信息 / gated activation
+        return self.w_down(F.silu(self.w_gate(x)) * self.w_up(x))
+```
+为保持总参数量相当，SwiGLU 通常把隐藏维取 `d_ff ≈ (2/3)·(4d)`（如 LLaMA 用 11008 而非 16384）。效果上，门控提供了输入相关的乘性非线性，等参数预算下困惑度优于 GELU-FFN，是 LLaMA/PaLM/Qwen 等的标配（参见 Shazeer 2020 "GLU Variants Improve Transformer"）。

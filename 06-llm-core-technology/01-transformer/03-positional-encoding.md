@@ -209,10 +209,47 @@ print(f"距离 50 的相似度: {sim_50:.4f}")
 
 **练习 1：** 实现正弦位置编码并可视化热力图。
 
+*参考答案*：直接复用 3.1 的 `sinusoidal_positional_encoding` 与 3.2 的可视化代码。
+
+```python
+import matplotlib.pyplot as plt
+pe = sinusoidal_positional_encoding(50, 128)  # Shape: [seq_len=50, d_model=128]
+plt.imshow(pe.numpy().T, aspect='auto', cmap='RdBu')  # 转置后纵轴为维度
+plt.xlabel("Position"); plt.ylabel("Dimension"); plt.colorbar(); plt.show()
+```
+
+观察要点：沿维度方向（纵轴）频率从高到低呈条纹状——低维（偶/奇成对）波长短、随位置快速振荡，高维波长长、近乎不变。波长几何级数从 `2π` 增到 `10000·2π`，因此低维编码精细位置、高维编码宏观位置。
+
 **练习 2：** 解释如果不加位置编码，Transformer 会出什么问题。
+
+*参考答案*：自注意力对输入是**置换等变**的——`Attention(PX) = P·Attention(X)`（P 为任意行置换矩阵），即打乱 token 顺序，每个 token 的输出只是跟着同样地换位，内容不变。后续逐位置的 FFN/LayerNorm 也都是 token 独立的。结果：模型无法区分 "I love you" 和 "you love I"，相当于把序列当成**词袋（bag of words）**处理，彻底丢失语序。位置编码（或 RoPE/ALiBi）通过给每个位置注入可区分的信号，打破这种置换对称性，让模型感知顺序。
 
 ### 进阶题
 
 **练习 3：** 实现 RoPE，验证注意力分数只依赖相对位置（改变绝对位置但保持相对位置不变，注意力分数不变）。
 
+*参考答案*：RoPE 把位置 `m` 的 query 旋转角度 `mθ`，位置 `n` 的 key 旋转 `nθ`，二者内积只含 `(m−n)θ`，故注意力分数仅依赖相对距离 `m−n`。验证：
+
+```python
+import torch
+def make_cos_sin(N, d, base=10000.0):
+    pos = torch.arange(N).float()[:, None]                       # Shape: [N, 1]
+    inv = base ** (-torch.arange(0, d, 2).float() / d)           # Shape: [d/2]
+    ang = pos * inv                                              # Shape: [N, d/2]
+    emb = torch.cat([ang, ang], dim=-1)                          # Shape: [N, d]
+    return emb.cos()[None, None], emb.sin()[None, None]          # [1,1,N,d]
+
+d = 8
+q = torch.randn(1, 1, 1, d); k = torch.randn(1, 1, 1, d)        # 同一对 q/k 向量
+def score_at(mi, ni):
+    cos, sin = make_cos_sin(64, d)
+    qr, _ = apply_rotary_pos_emb(q, q, cos[:, :, mi:mi+1], sin[:, :, mi:mi+1])
+    kr, _ = apply_rotary_pos_emb(k, k, cos[:, :, ni:ni+1], sin[:, :, ni:ni+1])
+    return (qr * kr).sum().item()
+# 相对距离都为 3，分数应几乎相等 / Same relative distance -> same score
+assert abs(score_at(5, 2) - score_at(40, 37)) < 1e-4
+```
+
 **练习 4：** 用可学习位置编码训练一个小 Transformer，然后尝试输入超过 `max_len` 的序列，观察效果退化。
+
+*参考答案*：可学习位置编码是 `nn.Embedding(max_len, d_model)`，只为 `0..max_len-1` 这 `max_len` 个位置学到了向量。输入长度 `> max_len` 时，`torch.arange(N)` 会取到 `≥ max_len` 的索引，直接触发 `IndexError`（嵌入表越界）。即便用取模/截断硬绕过越界，那些位置在训练中**从未见过**，输出也是垃圾——这正是绝对可学习编码**无法外推**的根因。对照之下，正弦编码可直接计算任意位置（数值仍合理但远端精度下降），RoPE/ALiBi 因编码相对距离而外推性更好。验证时固定 `max_len=64` 训练，推理喂入长度 128 的序列即可复现退化/报错。

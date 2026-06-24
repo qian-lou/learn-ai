@@ -162,8 +162,81 @@ config = TrainingConfig(model_name="bert", learning_rate=2e-5)
 
 ### 基础题
 **练习 1：** 为一个数据处理函数添加完整类型注解。
+
+*参考答案*：
+```python
+from collections.abc import Iterable
+
+def normalize(values: Iterable[float], lo: float = 0.0, hi: float = 1.0) -> list[float]:
+    """Min-max 归一化 / min-max normalize.
+
+    Args:
+        values: 输入数值序列 / input numbers.
+        lo: 目标区间下界 / target lower bound.
+        hi: 目标区间上界 / target upper bound.
+    Returns:
+        归一化后的列表 / normalized list.
+    """
+    data = list(values)
+    mn, mx = min(data), max(data)
+    span = mx - mn or 1.0          # 防止除零 / avoid div-by-zero
+    return [lo + (x - mn) / span * (hi - lo) for x in data]
+```
+
 **练习 2：** 用 Protocol 定义一个 `Serializable` 协议。
+
+*参考答案*：
+```python
+from typing import Protocol, runtime_checkable
+
+@runtime_checkable
+class Serializable(Protocol):
+    """任何实现 to_json 的类自动满足 / structural typing, no inheritance needed."""
+    def to_json(self) -> str: ...
+
+class User:                         # 未显式继承 Serializable / no explicit inherit
+    def to_json(self) -> str:
+        return "{}"
+
+def dump(obj: Serializable) -> str:  # 接受任何满足协议的对象 / duck-typed
+    return obj.to_json()
+```
 
 ### 进阶题
 **练习 3：** 用 Pydantic 实现一个带校验的模型配置类。
+
+*参考答案*：
+```python
+from pydantic import BaseModel, Field, field_validator
+
+class ModelConfig(BaseModel):
+    """运行时校验，类似 Java Bean Validation / runtime validation."""
+    model_name: str
+    learning_rate: float = Field(default=1e-4, gt=0)   # 必须 > 0 / must be positive
+    batch_size: int = Field(default=16, ge=1)
+    epochs: int = Field(default=3, ge=1)
+
+    @field_validator("model_name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("model_name 不能为空 / must not be blank")
+        return v
+
+cfg = ModelConfig(model_name="bert", learning_rate=2e-5)  # 非法值会抛 ValidationError
+```
+
 **练习 4：** 配置 mypy strict 模式，修复项目中所有类型错误。
+
+*参考答案*：
+```toml
+# pyproject.toml
+[tool.mypy]
+python_version = "3.11"
+strict = true                 # 开启全部严格检查 / enable all strict flags
+warn_return_any = true
+```
+```bash
+mypy src/ --strict            # 逐条修复报错 / fix errors one by one
+```
+修复要点 / Key fixes：为所有函数补全参数与返回注解；用 `X | None` 替代裸 `None` 返回；消除 `Any`（改用 `TypeVar`/`Protocol`）；对外部无类型库加 `# type: ignore[import-untyped]` 或安装其 stubs。

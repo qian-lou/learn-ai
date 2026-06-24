@@ -99,11 +99,13 @@ print(result)
 # 半精度加载（显存减半）
 # model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16)
 
-# 4-bit 量化加载（QLoRA 需要）
+# 4-bit 量化加载（QLoRA 需要）/ 4-bit loading via BitsAndBytesConfig
+# 新版需用 quantization_config，不再直传 load_in_4bit
+# from transformers import BitsAndBytesConfig
+# bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+#                          bnb_4bit_compute_dtype=torch.bfloat16)
 # model = AutoModelForCausalLM.from_pretrained(
-#     model_name,
-#     load_in_4bit=True,
-#     device_map="auto",
+#     model_name, quantization_config=bnb, device_map="auto",
 # )
 ```
 
@@ -162,10 +164,79 @@ model.generate(**inputs, max_new_tokens=100, streamer=streamer)
 
 **练习 1：** 用 pipeline 完成文本生成、情感分析、翻译三个任务。
 
+*参考答案*：
+
+```python
+from transformers import pipeline
+
+# 三个独立 pipeline / Three independent pipelines
+gen = pipeline("text-generation", model="gpt2")
+sentiment = pipeline("sentiment-analysis")
+translator = pipeline("translation_en_to_zh", model="Helsinki-NLP/opus-mt-en-zh")
+
+print(gen("The future of AI is", max_new_tokens=30)[0]["generated_text"])
+print(sentiment("I love this product!"))          # [{'label': 'POSITIVE', ...}]
+print(translator("Hello, how are you?")[0]["translation_text"])
+```
+
 **练习 2：** 手动加载 GPT-2，对比 `temperature=0.1` 和 `temperature=1.5` 的生成效果。
+
+*参考答案*：
+
+```python
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+
+tok = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+inputs = tok("Artificial intelligence", return_tensors="pt")
+
+# 低温更确定、保守；高温更随机、发散 / Low temp = deterministic, high temp = diverse
+for t in (0.1, 1.5):
+    out = model.generate(**inputs, max_new_tokens=40, do_sample=True,
+                         temperature=t, pad_token_id=tok.eos_token_id)
+    print(f"[temp={t}] {tok.decode(out[0], skip_special_tokens=True)}")
+```
 
 ### 进阶题
 
 **练习 3：** 用 `device_map="auto"` 加载一个 7B 模型，体验自动设备分配。
 
+*参考答案*：
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import torch
+
+model_name = "Qwen/Qwen2.5-7B-Instruct"
+# 4-bit 量化让 7B 模型放进单张消费级 GPU / 4-bit quant fits 7B on a single consumer GPU
+bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                         bnb_4bit_compute_dtype=torch.bfloat16)
+tok = AutoTokenizer.from_pretrained(model_name)
+# device_map="auto" 由 accelerate 自动把层分配到 GPU/CPU / accelerate auto-shards layers
+model = AutoModelForCausalLM.from_pretrained(
+    model_name, quantization_config=bnb, device_map="auto")
+print(model.hf_device_map)  # 查看每层落在哪个设备 / inspect per-layer placement
+```
+
 **练习 4：** 用 `AutoModelForSequenceClassification` 对 BERT 做情感分类微调。
+
+*参考答案*：详见本章 `03-trainer-api.md` 的完整流程，核心是用分类头加载模型并交给 `Trainer`。
+
+```python
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          Trainer, TrainingArguments, DataCollatorWithPadding)
+from datasets import load_dataset
+
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+# num_labels=2 自动添加二分类头 / num_labels=2 attaches a binary classification head
+model = AutoModelForSequenceClassification.from_pretrained(
+    "bert-base-uncased", num_labels=2)
+ds = load_dataset("imdb")
+ds = ds.map(lambda x: tok(x["text"], truncation=True, max_length=256), batched=True)
+
+args = TrainingArguments(output_dir="./out", num_train_epochs=2,
+                         per_device_train_batch_size=16, eval_strategy="epoch", fp16=True)
+Trainer(model=model, args=args, train_dataset=ds["train"], eval_dataset=ds["test"],
+        data_collator=DataCollatorWithPadding(tok)).train()
+```

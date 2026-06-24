@@ -23,11 +23,12 @@
 from langchain_community.document_loaders import (
     PyPDFLoader, TextLoader, DirectoryLoader,
 )
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings   # 独立包，替代 community
+from langchain_chroma import Chroma                        # 独立包，替代 community
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import PromptTemplate
 
 # ============================================================
 # Step 1: 加载多种格式文档
@@ -75,12 +76,13 @@ rag_prompt = PromptTemplate.from_template("""
 
 回答：""")
 
-# qa_chain = RetrievalQA.from_chain_type(
-#     llm=llm,
-#     retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
-#     chain_type_kwargs={"prompt": rag_prompt},
-#     return_source_documents=True,
+# LCEL 组合（替代已废弃的 RetrievalQA）/ Modern LCEL composition
+# 注意：prompt 需用 {context} 与 {input} 两个变量
+# combine_chain = create_stuff_documents_chain(llm, rag_prompt)
+# qa_chain = create_retrieval_chain(
+#     vectorstore.as_retriever(search_kwargs={"k": 3}), combine_chain
 # )
+# result = qa_chain.invoke({"input": "..."})  # -> {"answer": ..., "context": [...]}
 ```
 
 ### 3.2 检索优化策略
@@ -169,10 +171,92 @@ def rag_chat(message, history):
 
 **练习 1：** 构建一个基于公司内部文档的 RAG 问答系统。
 
+*参考答案*：用 `DirectoryLoader` 批量加载内部文档目录，其余沿用 3.1 节 LCEL 管线。
+
+```python
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+
+# 递归加载内部文档目录 / recursively load the internal docs folder
+docs = DirectoryLoader("./company_docs", glob="**/*.txt", loader_cls=TextLoader).load()
+chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50).split_documents(docs)
+vs = Chroma.from_documents(chunks, HuggingFaceEmbeddings(model_name="BAAI/bge-base-zh-v1.5"),
+                           persist_directory="./company_db")
+
+prompt = ChatPromptTemplate.from_template(
+    "只依据上下文回答，缺信息就说找不到。\n\n上下文：{context}\n\n问题：{input}")
+chain = create_retrieval_chain(
+    vs.as_retriever(search_kwargs={"k": 4}),
+    create_stuff_documents_chain(ChatOpenAI(model="gpt-4o-mini"), prompt))
+print(chain.invoke({"input": "报销流程是什么？"})["answer"])
+```
+
 **练习 2：** 对比 Top-3、Top-5、Top-10 不同 K 值对回答质量的影响。
+
+*参考答案*：K 越大召回越全但噪音越多、prompt 越长。固定问题切换 retriever 的 k 观察答案。
+
+```python
+question = "报销流程是什么？"
+for k in (3, 5, 10):
+    chain = create_retrieval_chain(
+        vs.as_retriever(search_kwargs={"k": k}),  # 只改 k / vary only k
+        create_stuff_documents_chain(ChatOpenAI(model="gpt-4o-mini"), prompt))
+    out = chain.invoke({"input": question})
+    print(f"[k={k}] 引用 {len(out['context'])} 段 → {out['answer'][:80]}")
+# 经验：k 太大引入无关片段反而降质 / too-large k hurts via irrelevant context
+```
 
 ### 进阶题
 
 **练习 3：** 实现 Hybrid Search + Re-ranking 的高级检索管线。
 
+*参考答案*：先 Hybrid 粗召回，再用 `ContextualCompressionRetriever` 套 Cross-Encoder 精排。
+
+```python
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import CrossEncoderReranker
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+
+# 1) Hybrid 粗召回 / hybrid coarse recall
+bm25 = BM25Retriever.from_documents(chunks); bm25.k = 10
+hybrid = EnsembleRetriever(
+    retrievers=[bm25, vs.as_retriever(search_kwargs={"k": 10})], weights=[0.3, 0.7])
+
+# 2) Cross-Encoder 精排取 Top-3 / rerank to top-3
+reranker = CrossEncoderReranker(
+    model=HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base"), top_n=3)
+pipeline = ContextualCompressionRetriever(
+    base_compressor=reranker, base_retriever=hybrid)
+docs = pipeline.invoke("报销流程是什么？")
+```
+
 **练习 4：** 用 RAGAS 框架自动评估你的 RAG 系统质量。
+
+*参考答案*：RAGAS 需要 question / answer / contexts /（可选 ground_truth），用 LLM 自动打分四大指标。
+
+```python
+from datasets import Dataset
+from ragas import evaluate
+from ragas.metrics import (faithfulness, answer_relevancy,
+                           context_precision, context_recall)
+
+# 收集每条样本的问题、RAG 答案、检索片段、参考答案
+# Collect question / generated answer / retrieved contexts / ground truth
+data = Dataset.from_dict({
+    "question": ["报销流程是什么？"],
+    "answer": ["先在 OA 提交申请，主管审批后财务打款。"],
+    "contexts": [["报销需在 OA 系统提交……主管审批……财务打款"]],
+    "ground_truth": ["OA 提交→主管审批→财务打款"],
+})
+# 四指标：忠实度/相关性/上下文精确率/召回率 / four RAGAS metrics
+result = evaluate(data, metrics=[faithfulness, answer_relevancy,
+                                 context_precision, context_recall])
+print(result)
+```

@@ -159,10 +159,89 @@ model = AutoModelForTokenClassification.from_pretrained("bert-base-uncased", num
 
 **练习 1：** 用 Trainer 微调 BERT 做 IMDB 情感分类，达到 90%+ 准确率。
 
+*参考答案*：直接套用 3.1 节完整流程即可，关键超参如下，`bert-base-uncased` 在 IMDB 上 2-3 epoch 通常可达 92%+。
+
+```python
+# 复用 3.1 的 tokenized / model / compute_metrics / data_collator
+# Reuse tokenized/model/compute_metrics/data_collator from §3.1
+args = TrainingArguments(
+    output_dir="./results", num_train_epochs=3,
+    per_device_train_batch_size=16, learning_rate=2e-5,
+    weight_decay=0.01, warmup_ratio=0.1,
+    eval_strategy="epoch", load_best_model_at_end=True,
+    metric_for_best_model="f1", fp16=True)
+trainer = Trainer(model=model, args=args, train_dataset=tokenized["train"],
+                  eval_dataset=tokenized["test"], data_collator=data_collator,
+                  compute_metrics=compute_metrics)
+trainer.train()
+print(trainer.evaluate())  # 期望 accuracy > 0.90 / expect accuracy > 0.90
+```
+
 **练习 2：** 添加 Early Stopping callback，防止过拟合。
+
+*参考答案*：
+
+```python
+from transformers import EarlyStoppingCallback
+
+# Early Stopping 需配合 eval_strategy 与 load_best_model_at_end
+# Early stopping requires eval_strategy + load_best_model_at_end
+args = TrainingArguments(
+    output_dir="./results", eval_strategy="epoch", save_strategy="epoch",
+    load_best_model_at_end=True, metric_for_best_model="f1",
+    num_train_epochs=10, fp16=True)
+trainer = Trainer(
+    model=model, args=args, train_dataset=tokenized["train"],
+    eval_dataset=tokenized["test"], data_collator=data_collator,
+    compute_metrics=compute_metrics,
+    # 连续 2 次评估无提升则停止 / stop after 2 evals without improvement
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=2)])
+trainer.train()
+```
 
 ### 进阶题
 
 **练习 3：** 自定义 Trainer（继承 Trainer 类），重写 `compute_loss` 方法实现 focal loss。
 
+*参考答案*：
+
+```python
+import torch
+import torch.nn.functional as F
+from transformers import Trainer
+
+class FocalTrainer(Trainer):
+    # 新版签名带 num_items_in_batch 参数 / new signature includes num_items_in_batch
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        labels = inputs.pop("labels")
+        logits = model(**inputs).logits
+        ce = F.cross_entropy(logits, labels, reduction="none")
+        pt = torch.exp(-ce)                       # pt = 预测正确类的概率 / prob of true class
+        # Focal Loss: 降低易分类样本权重，聚焦难样本 / down-weight easy samples
+        loss = ((1 - pt) ** 2 * ce).mean()        # gamma=2
+        return (loss, {"logits": logits}) if return_outputs else loss
+```
+
 **练习 4：** 用 Trainer + LoRA 微调一个 7B 模型做分类任务。
+
+*参考答案*：用 PEFT 给模型套上 LoRA 后照常交给 `Trainer`，只训练 ~0.1% 参数。
+
+```python
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          Trainer, TrainingArguments, BitsAndBytesConfig)
+from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_training
+import torch
+
+name = "Qwen/Qwen2.5-7B"
+bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                         bnb_4bit_compute_dtype=torch.bfloat16)
+model = AutoModelForSequenceClassification.from_pretrained(
+    name, num_labels=2, quantization_config=bnb, device_map="auto")
+model = prepare_model_for_kbit_training(model)  # 量化训练前置处理 / prep for k-bit training
+# 序列分类任务用 SEQ_CLS / use SEQ_CLS task type for classification
+lora = LoraConfig(task_type=TaskType.SEQ_CLS, r=16, lora_alpha=32,
+                  target_modules=["q_proj", "v_proj"])
+model = get_peft_model(model, lora)
+model.print_trainable_parameters()
+# 之后照常构造 Trainer 训练 / build Trainer as usual afterwards
+```

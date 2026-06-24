@@ -4,7 +4,7 @@
 
 > **为什么要学这个？**
 >
-> GPT 系列是大模型时代的**定义者**。从 GPT-1 的 117M 参数到 GPT-4 的万亿级参数，OpenAI 证明了一个惊人的结论：**只要规模足够大，简单的自回归语言模型就能涌现出惊人的智能**。
+> GPT 系列是大模型时代的**定义者**。从 GPT-1 的 117M 参数到 GPT-4 的巨型规模（官方未公开参数量），OpenAI 证明了一个惊人的结论：**只要规模足够大，简单的自回归语言模型就能涌现出惊人的智能**。
 >
 > GPT 对技术栈的影响：Prompt Engineering、Few-shot Learning、RLHF、Chain-of-Thought 等核心技术都因 GPT 系列而生。
 >
@@ -18,7 +18,7 @@
 | GPT-2 | 2019 | 1.5B | Zero-shot 能力，拒绝发布 |
 | GPT-3 | 2020 | 175B | Few-shot / In-Context Learning |
 | InstructGPT | 2022 | 1.3B | RLHF 人类对齐 |
-| GPT-4 | 2023 | ~1.7T (MoE) | 多模态，强推理 |
+| GPT-4 | 2023 | 官方未公开（传闻 ~1.7T MoE） | 多模态，强推理 |
 
 ## 3. 内容（Content）
 
@@ -190,10 +190,55 @@ for model_name in models:
 
 **练习 1：** 用 GPT-2 做 few-shot 情感分类，对比 0-shot、1-shot、5-shot 的效果。
 
+*参考答案*：在 prompt 中放入 0/1/5 个"文本→标签"示例，再让模型续写最后一条的标签。
+
+```python
+def build_prompt(shots, query):
+    demos = "".join(f'Text: "{t}" -> {l}\n' for t, l in shots)
+    return f"Classify sentiment:\n{demos}Text: \"{query}\" ->"
+# shots=[] 即 0-shot；取 1 条为 1-shot；取 5 条为 5-shot
+out = model.generate(**tokenizer(build_prompt(shots, q), return_tensors="pt"),
+                     max_new_tokens=3, do_sample=False)  # 贪心，便于复现
+```
+预期：随示例增多，GPT-2 越能模仿"输出单个标签词"的格式，准确率通常 0-shot < 1-shot < 5-shot。但 GPT-2（124M–1.5B）本身较弱，提升有限且对示例顺序/措辞敏感；In-Context Learning 的威力要到 GPT-3（175B）规模才充分显现。评测时建议固定标签集并只取生成首词归一化匹配。
+
 **练习 2：** 用不同 temperature（0.1, 0.5, 1.0, 1.5）生成文本，分析多样性和质量的权衡。
+
+*参考答案*：temperature `T` 缩放 logits：`softmax(logits / T)`。`T→0` 趋近贪心（确定、保守），`T` 越大分布越平、采样越随机。
+
+```python
+for T in [0.1, 0.5, 1.0, 1.5]:
+    out = model.generate(**inputs, max_new_tokens=40, do_sample=True, temperature=T)
+    print(T, tokenizer.decode(out[0], skip_special_tokens=True))
+```
+权衡：`T=0.1` 文本连贯但单调、易重复；`T=0.5–0.7` 多样性与连贯性平衡，最常用；`T=1.0` 更有创意但偶有跑题；`T=1.5` 高度随机，常出现语法错乱、胡言乱语。实践中常配合 `top_p`（核采样）/`top_k` 截断长尾，再调 `T`。
 
 ### 进阶题
 
 **练习 3：** 实现 Chain-of-Thought 提示，观察 GPT-2 是否有推理能力（预期：没有，需要更大模型）。
 
+*参考答案*：CoT 即在 prompt 里加"Let's think step by step"或给出带推理步骤的示例，引导模型先写中间推理再给答案。
+
+```python
+prompt = ("Q: Roger has 5 balls. He buys 2 cans of 3 balls each. How many now?\n"
+          "A: Let's think step by step.")
+out = model.generate(**tokenizer(prompt, return_tensors="pt"),
+                     max_new_tokens=60, do_sample=False)
+```
+观察结论与 Wei et al. 2022（CoT）一致：CoT 是一种**涌现能力，仅在 ~100B+ 参数模型上才稳定生效**。GPT-2（≤1.5B）即使加了 CoT 提示，也往往写出看似步骤、实则计算错误的文本，正确率不会系统性提升——这正反证了"推理"依赖规模。要复现有效 CoT 需换更大模型（如 GPT-3.5/4、LLaMA-3-70B）。
+
 **练习 4：** 用 GPT-2 的 logits 分析模型对下一个 token 的预测概率分布，可视化 top-10 候选词。
+
+*参考答案*：取最后一个位置的 logits，softmax 后用 `topk` 取前 10。
+
+```python
+import torch
+inputs = tokenizer("The capital of France is", return_tensors="pt")
+with torch.no_grad():
+    logits = model(**inputs).logits          # Shape: [B, N, vocab_size]
+probs = torch.softmax(logits[0, -1], dim=-1) # 最后一个 token 的下一词分布
+topp, topi = probs.topk(10)
+for p, i in zip(topp, topi):
+    print(f"{tokenizer.decode(i):>12s}  {p.item():.3f}")
+```
+预期：" Paris" 概率最高，其后是" the"" a"等高频续接词。可进一步对比施加 temperature 前后分布的"尖锐/平坦"变化，直观理解采样温度对候选词概率的影响。柱状图用 `matplotlib.bar(范围, topp)` 绘制即可。

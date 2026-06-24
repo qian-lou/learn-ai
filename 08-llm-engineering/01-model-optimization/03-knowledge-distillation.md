@@ -122,10 +122,70 @@ student = AutoModelForSequenceClassification.from_pretrained("distilbert-base-un
 
 **练习 1：** 实现 DistillationLoss，用 BERT 蒸馏到小模型做分类。
 
+*参考答案*：
+
+复用 3.2 的 `DistillationLoss`，训练循环关键：Teacher 推理时 `eval()` + `no_grad()`，只更新 Student。
+
+```python
+teacher.eval()
+for batch in loader:
+    with torch.no_grad():
+        t_logits = teacher(**batch).logits          # 软标签来源 / soft targets
+    s_logits = student(**batch).logits
+    loss = distill_loss(s_logits, t_logits, batch["labels"])
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+```
+
+要点：(1) Teacher 不回传梯度，省显存；(2) 软标签损失已乘 `T²` 校正梯度量级；(3) Student（如 `distilbert-base`）通常能保留 Teacher 约 95%+ 的准确率，体积小约 40%。
+
 **练习 2：** 对比不同 Temperature（2, 5, 10）对蒸馏效果的影响。
+
+*参考答案*：
+
+固定其它超参，仅扫 `T ∈ {2, 5, 10}`，记录 Student 在验证集的准确率。
+
+```python
+for T in (2, 5, 10):
+    distill_loss = DistillationLoss(temperature=float(T), alpha=0.7)
+    acc = train_and_eval(student_fresh(), distill_loss)  # 每次重置 student
+    print(f"T={T}: acc={acc:.4f}")
+```
+
+预期：T 越大软标签越平滑、暗知识（类间关系）越显著，但过大时信息被过度抹平。分类任务常见最优在 T≈2~5；本质是"平滑程度 vs 信息量"的权衡，没有放之四海皆准的值，需按任务实测。
 
 ### 进阶题
 
 **练习 3：** 用 GPT-4 API 生成 1000 条指令数据，微调 GPT-2（数据蒸馏）。
 
+*参考答案*：
+
+两步：先用强 Teacher（GPT-4 类）批量造 `instruction → response` 数据，再 SFT 小模型。
+
+```python
+# 1) 生成数据 / generate data (Self-Instruct 风格，可给种子任务提多样性)
+from openai import OpenAI
+client = OpenAI()
+data = []
+for _ in range(1000):
+    r = client.chat.completions.create(model="gpt-4o",
+        messages=[{"role": "user", "content": "生成一条指令及其高质量回答，JSON 格式"}])
+    data.append(r.choices[0].message.content)  # 落盘为 jsonl
+
+# 2) SFT GPT-2：把样本拼成 "指令\n回答" 文本，按因果语言建模微调
+#    Fine-tune GPT-2 with causal-LM loss on "instruction\nresponse"
+```
+
+要点：(1) 这是**数据蒸馏**，迁移的是 Teacher 的"行为/输出分布"而非参数；(2) 必须去重、过滤低质/越权样本，质量比数量更关键；(3) 合规提示：用闭源模型输出训练模型可能受其服务条款限制，生产前需确认许可。
+
 **练习 4：** 对比数据蒸馏和模型蒸馏在小模型上的效果差异。
+
+*参考答案*：
+
+| 维度 | 模型蒸馏（logits/特征） | 数据蒸馏（生成数据） |
+|------|------------------------|----------------------|
+| 需要 Teacher | 训练时在线前向，开销大 | 仅离线造数据一次 |
+| 是否需同词表/可访问权重 | 通常需要 | 不需要，黑盒 API 即可 |
+| 监督信号 | 软标签信息丰富 | 仅硬文本（信息略少） |
+| 适用 | 同架构压缩、分类 | 指令/对话能力迁移（LLM 主流） |
+
+结论：经典分类压缩场景模型蒸馏样本效率更高；大模型指令对齐时数据蒸馏（Alpaca/Vicuna 路线）更实用、可跨架构。实验上控制 Student 与训练量一致再比准确率/胜率，才公平。二者也常结合：先数据蒸馏扩样本，再加 logits 蒸馏。

@@ -165,10 +165,83 @@ with temp_seed(42):
 
 **练习 1：** 实现一个 `WorkingDirectory` 上下文管理器，进入时切换目录，退出时恢复。
 
+*参考答案*：
+```python
+import os
+from contextlib import contextmanager
+
+@contextmanager
+def working_directory(path: str):
+    origin = os.getcwd()        # 记录原目录 / save original cwd
+    os.chdir(path)
+    try:
+        yield                   # with 块在此执行 / with-body runs here
+    finally:
+        os.chdir(origin)        # 无论是否异常都恢复 / restore even on exception
+
+with working_directory("/tmp"):
+    print(os.getcwd())          # /tmp
+```
+
 **练习 2：** 用 `@contextmanager` 实现一个文件锁。
+
+*参考答案*：
+```python
+import fcntl  # Unix/macOS 文件锁 / POSIX advisory lock
+from contextlib import contextmanager
+
+@contextmanager
+def file_lock(path: str):
+    with open(path, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)   # 获取排他锁（阻塞）/ exclusive lock
+        try:
+            yield f
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)  # 释放锁 / release; 文件关闭也会自动释放
+
+with file_lock("/tmp/app.lock"):
+    print("临界区，独占执行 / critical section")
+```
 
 ### 进阶题
 
 **练习 3：** 实现 `DatabaseConnection`，支持自动提交/回滚事务。
 
+*参考答案*：
+```python
+class Transaction:
+    """类似 Java try-with-resources + 事务模板 / commit on success, rollback on error."""
+    def __init__(self, conn) -> None:
+        self.conn = conn
+
+    def __enter__(self):
+        return self.conn
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        if exc_type is None:
+            self.conn.commit()      # 无异常则提交 / commit on success
+        else:
+            self.conn.rollback()    # 有异常则回滚 / rollback on error
+        return False                # 不抑制异常，让其向上传播 / don't suppress
+
+# with Transaction(conn) as c:
+#     c.execute("INSERT ...")       # 出错自动回滚 / auto-rollback on failure
+```
+
 **练习 4：** 实现一个 `ModelEvalMode` 上下文管理器，进入时切换模型为 eval 模式，退出时恢复 train 模式。
+
+*参考答案*：
+```python
+import torch
+from contextlib import contextmanager
+
+@contextmanager
+def model_eval_mode(model: "torch.nn.Module"):
+    was_training = model.training   # 记录原状态，更稳健 / save original state
+    model.eval()                    # 切到推理模式 / switch to eval
+    try:
+        with torch.no_grad():       # 推理通常同时禁用梯度 / also disable grad
+            yield model
+    finally:
+        model.train(was_training)   # 恢复原模式 / restore original mode
+```

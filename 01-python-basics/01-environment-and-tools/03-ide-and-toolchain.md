@@ -339,17 +339,77 @@ EOF
 2. 创建一个 Code Cell，导入 `sys` 并打印 Python 版本
 3. 使用 `%timeit` 魔术命令测量 `sum(range(1000000))` 的执行时间
 
+*参考答案*：
+```python
+# Cell 1（Markdown 单元 / Markdown cell）
+# # 学习目标：掌握 Jupyter 交互式开发 / Goal: master interactive Jupyter dev
+
+# Cell 2（Code 单元 / Code cell）
+import sys
+print(sys.version)          # 打印完整版本 / full version string
+print(sys.version_info)     # 结构化版本号 / structured tuple
+
+# Cell 3（魔术命令需独占一行 / magic must be on its own line）
+%timeit sum(range(1000000)) # 多次运行取统计值 / repeated timing stats
+```
+
 **练习 2：** 安装 Ruff，并配置 `pyproject.toml` 使其：
 - 行宽限制为 120
 - 启用 import 排序
 - 目标 Python 版本为 3.11
 
+*参考答案*：
+```bash
+pip install ruff   # 安装 / install
+```
+```toml
+# pyproject.toml
+[tool.ruff]
+target-version = "py311"      # 目标版本 / target Python
+line-length = 120             # 行宽 / line width
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]      # "I" = isort，启用 import 排序 / enable import sorting
+```
+```bash
+ruff check --fix .            # 检查并自动排序 import / lint & auto-sort imports
+```
+
 ### 进阶题
 
 **练习 3：** 对比 Java 和 Python 的项目结构，画一张表格说明每个目录/文件的对应关系。思考：Python 为什么不需要 `src/main` 和 `src/test` 的分层？
+
+*参考答案*：
+
+| Python | Java | 说明 |
+|--------|------|------|
+| `pyproject.toml` | `pom.xml` | 构建与依赖声明 / build & deps |
+| `src/my_project/` | `src/main/java/` | 源码包 / source package |
+| `tests/` | `src/test/java/` | 测试 / tests |
+| `__init__.py` | `package-info.java` | 包标识 / package marker |
+| `configs/*.yaml` | `src/main/resources/` | 配置资源 / config resources |
+
+为什么不需要 `src/main` 和 `src/test` 的强制分层 / Why no enforced split：Python 无独立编译阶段，`pytest` 靠 `test_` 前缀按约定发现测试，而非靠目录隔离编译产物；故只需源码包与 `tests/` 平级即可，分层是约定而非工具强制。
 
 **练习 4：** 使用 Jupyter Notebook 编写一个交互式的数据探索脚本：
 1. 使用 `numpy` 生成 1000 个随机数
 2. 计算均值和标准差
 3. 画一个直方图
 4. 使用 `%timeit` 比较 Python 原生 `sum()` 和 `numpy.sum()` 的性能差异
+
+*参考答案*：
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+data = np.random.randn(1000)                      # 1000 个标准正态随机数 / 1000 samples
+print(f"均值 mean={data.mean():.4f} 标准差 std={data.std():.4f}")
+
+plt.hist(data, bins=30)                            # 直方图 / histogram
+plt.title("Distribution")
+plt.show()
+
+# 性能对比：numpy.sum 向量化，远快于原生 sum / vectorized sum is much faster
+%timeit sum(data)        # 纯 Python 循环 / pure-Python loop
+%timeit np.sum(data)     # C 层向量化 / C-level vectorized
+```

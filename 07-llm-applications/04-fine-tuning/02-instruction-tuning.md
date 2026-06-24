@@ -124,6 +124,7 @@ trainer = SFTTrainer(
     model=model,
     args=training_args,
     train_dataset=dataset,
+    processing_class=tokenizer,  # TRL 0.12+ 用 processing_class 取代 tokenizer
 )
 trainer.train()
 ```
@@ -180,10 +181,99 @@ def generate_sft_data(task_description, n_samples=10):
 
 **练习 1：** 准备 100 条高质量指令微调数据，覆盖翻译、摘要、问答三种任务。
 
+*参考答案*：按 Alpaca 三字段构造，三类任务均衡分布，落盘为 JSONL 供 SFT 加载。
+
+```python
+import json
+
+# 每类约 33 条，保证任务多样性 / ~33 per task type for diversity
+samples = [
+    {"instruction": "翻译成英文", "input": "今天天气很好", "output": "The weather is nice today."},
+    {"instruction": "用一句话总结下文", "input": "深度学习是机器学习的子领域……",
+     "output": "深度学习是基于神经网络的机器学习方法。"},
+    {"instruction": "回答问题", "input": "Transformer 的核心机制是什么？",
+     "output": "核心是自注意力机制（Self-Attention）。"},
+    # ... 共 100 条，三类均衡 / 100 rows total, balanced ...
+]
+with open("sft_data.jsonl", "w", encoding="utf-8") as f:
+    for s in samples:
+        f.write(json.dumps(s, ensure_ascii=False) + "\n")
+```
+
 **练习 2：** 用 LoRA + SFTTrainer 微调 GPT-2，让它学会遵循指令。
+
+*参考答案*：套用 3.2 节流程，GPT-2 的 target_modules 用 `c_attn`，数据经 Alpaca 模板格式化。
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig, get_peft_model, TaskType
+from trl import SFTTrainer, SFTConfig
+from datasets import load_dataset
+
+tok = AutoTokenizer.from_pretrained("gpt2")
+tok.pad_token = tok.eos_token  # GPT-2 无 pad token，复用 eos / GPT-2 has no pad token
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+model = get_peft_model(model, LoraConfig(
+    task_type=TaskType.CAUSAL_LM, r=16, lora_alpha=32, target_modules=["c_attn"]))
+
+ds = load_dataset("json", data_files="sft_data.jsonl", split="train")
+ds = ds.map(lambda e: {"text":
+    f"### Instruction:\n{e['instruction']}\n\n### Input:\n{e['input']}\n\n### Response:\n{e['output']}"})
+
+trainer = SFTTrainer(
+    model=model, train_dataset=ds,
+    args=SFTConfig(output_dir="./gpt2_sft", num_train_epochs=3, max_seq_length=512),
+    processing_class=tok)  # TRL 0.12+ 用 processing_class / use processing_class
+trainer.train()
+```
 
 ### 进阶题
 
 **练习 3：** 实现 Self-Instruct：用一个已有模型生成训练数据，微调另一个模型。
 
+*参考答案*：用强模型（teacher）按种子任务批量生成 Alpaca 数据，去重后用于微调弱模型（student）。
+
+```python
+import json
+from openai import OpenAI
+client = OpenAI()
+
+def gen_samples(task: str, n: int = 10) -> list[dict]:
+    """用 teacher 模型生成指令数据 / generate instruction data via a teacher model."""
+    prompt = (f"生成 {n} 条「{task}」任务的指令微调数据，每行一个 JSON："
+              '{"instruction": "...", "input": "...", "output": "..."}')
+    text = client.chat.completions.create(
+        model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}]
+    ).choices[0].message.content
+    rows = []
+    for line in text.splitlines():
+        try:
+            rows.append(json.loads(line))   # 仅解析合法 JSON，不用 eval / parse, never eval
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+data = gen_samples("翻译", 50) + gen_samples("摘要", 50)
+# 去重后即可作为练习 2 的 sft_data.jsonl 微调 student / dedup then feed to student SFT
+```
+
 **练习 4：** 对比不同数据量（100/1000/10000 条）对 SFT 效果的影响。
+
+*参考答案*：固定模型与超参，只变训练样本数，在同一验证集上比 eval loss。通常质量比数量更关键，收益随量增递减。
+
+```python
+from datasets import load_dataset
+from trl import SFTTrainer, SFTConfig
+
+full = load_dataset("json", data_files="sft_data.jsonl", split="train")
+for size in (100, 1000, 10000):
+    subset = full.select(range(min(size, len(full))))  # 截取子集 / take subset
+    trainer = SFTTrainer(
+        model=model, train_dataset=subset,
+        args=SFTConfig(output_dir=f"./sft_{size}", num_train_epochs=3,
+                       max_seq_length=512),
+        processing_class=tok)
+    trainer.train()
+    print(f"[n={size}] eval_loss =", trainer.evaluate().get("eval_loss"))
+# 经验：1000 条高质量常优于 10000 条噪声数据 / quality beats quantity
+```

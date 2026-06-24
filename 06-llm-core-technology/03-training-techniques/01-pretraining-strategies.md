@@ -156,10 +156,48 @@ for r in results[:5]:
 
 **练习 1：** 用 BERT 的 MLM 和 GPT-2 的 CLM 分别预测同一个句子中缺失的词，对比结果。
 
+*参考答案*：BERT 用 `[MASK]` 占位、**双向**预测被遮词；GPT-2 只能基于**左侧**前缀续写下一个词。
+
+```python
+from transformers import pipeline
+mlm = pipeline("fill-mask", model="bert-base-uncased")
+print(mlm("The capital of France is [MASK].")[0]["token_str"])   # -> paris
+clm = pipeline("text-generation", model="gpt2")
+print(clm("The capital of France is", max_new_tokens=3)[0]["generated_text"])
+```
+对比结论：BERT 能利用 `[MASK]` **右侧**的"."与上下文，预测更精准，适合填空/理解；GPT-2 看不到右侧，只能顺序生成，擅长续写但做完形填空需把空格放句尾。本质区别即双向编码 vs 单向自回归。
+
 **练习 2：** 解释为什么 MLM 的遮盖策略中有 10% 保持不变。
+
+*参考答案*：核心是缓解**预训练-微调不一致**（pretrain-finetune mismatch）：下游任务的输入里没有 `[MASK]`，若训练时被选中的词 100% 换成 `[MASK]`，模型会习得"只在看到 `[MASK]` 时才努力编码该位置"的捷径。策略为 80% 换 `[MASK]` / 10% 换随机词 / **10% 保持原词**。保留原词的作用是：模型事先**不知道**当前 token 是否被改动，因而被迫对**每一个**位置都维持准确的上下文表示（而非只对 `[MASK]` 位置发力）；10% 随机替换则进一步逼模型纠错、增强鲁棒性。两者共同让 BERT 学到的表示更贴近真实输入分布。
 
 ### 进阶题
 
 **练习 3：** 设计一个实验：分别用 MLM 和 CLM 预训练一个 Transformer，在下游分类任务上对比效果。
 
+*参考答案*：控制变量——**同一架构、同一语料、同一参数量**，仅预训练目标不同（MLM 用双向 + `[MASK]` 损失；CLM 用因果掩码 + next-token 损失），再在同一分类任务上以相同方式微调对比。
+
+```
+实验设计：
+1. 固定: d_model / 层数 / 数据集(如 WikiText) / 训练步数
+2. 变量: 目标 A=MLM(双向, 预测被遮 15% token)
+         目标 B=CLM(因果掩码, 预测下一 token)
+3. 下游: 同一分类任务微调
+   - MLM: 取 [CLS]/首 token 表示 → 分类头
+   - CLM: 取最后一个 token 表示 → 分类头
+4. 指标: 准确率 / F1 / 收敛速度，多个随机种子取均值
+```
+预期：在**小规模**下，MLM 因双向上下文，分类等理解任务通常占优；但随规模增大，CLM 的差距收窄（与正文 4.1 一致）。务必固定除目标外的一切，否则结论不可信。
+
 **练习 4：** 用 LLaMA 的 tokenizer 分析训练数据的 token 分布，理解 "1T tokens" 到底有多少文本。
+
+*参考答案*：用 LLaMA tokenizer 统计"字符/词 → token"的换算比，再推算 1T tokens 的文本量。
+
+```python
+from transformers import AutoTokenizer
+tok = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+text = open("sample.txt").read()
+n_tok = len(tok(text)["input_ids"])
+print(f"字符/token = {len(text)/n_tok:.2f}, 词/token = {len(text.split())/n_tok:.2f}")
+```
+经验比值：英文约 **1 token ≈ 0.75 词 ≈ 4 个字符**（中文因子词更碎，1 字常 ≥1 token）。据此 **1T(1e12) tokens ≈ 7500 亿英文单词 ≈ 4e12 字符**。直观换算：一本书约 10 万词 ≈ 13 万 tokens，故 1T tokens ≈ **约 750 万本书**的规模——这解释了为何只有大机构才有足够高质量语料做预训练。注意 LLaMA-2 需 HF 授权。

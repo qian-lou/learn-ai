@@ -135,6 +135,46 @@ print(double(5))  # 10
 
 **练习 1：** 编写 `make_adder(n)` 返回加 n 的函数。
 
+*参考答案*：
+```python
+# Time: O(1) Space: O(1)
+from typing import Callable
+
+def make_adder(n: int) -> Callable[[int], int]:
+    return lambda x: x + n   # 闭包捕获 n / closure captures n
+
+add5 = make_adder(5)
+print(add5(10))  # 15
+```
+
 **练习 2：** 实现 `memoize` 装饰器函数，缓存函数调用结果。
 
+*参考答案*：
+```python
+# Time: O(1) 命中缓存 / cache hit; Space: O(N) 缓存条目数 / cached entries
+from functools import wraps
+from typing import Callable
+
+def memoize(func: Callable) -> Callable:
+    cache: dict = {}  # 以参数为键 / keyed by args
+    @wraps(func)
+    def wrapper(*args):
+        if args not in cache:
+            cache[args] = func(*args)  # 未命中则计算 / compute on miss
+        return cache[args]
+    return wrapper
+
+# 生产环境直接用标准库 / prefer stdlib in prod: @functools.lru_cache(maxsize=None)
+```
+
 **练习 3：** 解释为什么 `[lambda x: x*i for i in range(5)]` 中所有 lambda 返回相同结果，如何修复？
+
+*参考答案*：
+
+原因 / Cause：lambda 闭包按引用捕获变量 `i`，而非循环时的值；循环结束后 `i==4`，故每个 lambda 都用 `i=4`（延迟绑定 / late binding）。
+
+```python
+# 修复：用默认参数在定义时立即绑定当前值 / bind current value at define-time
+funcs = [lambda x, i=i: x * i for i in range(5)]
+print([f(10) for f in funcs])  # [0, 10, 20, 30, 40]
+```

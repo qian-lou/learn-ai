@@ -157,7 +157,7 @@ client = OpenAI()
 
 # Zero-shot
 response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
+    model="gpt-4o-mini",  # gpt-3.5-turbo 已下线，换用现役模型
     messages=[{"role": "user", "content": "翻译成英文：机器学习"}]
 )
 
@@ -176,10 +176,98 @@ messages = [
 
 **练习 1：** 设计 Prompt 让 LLM 做情感分析，对比 zero-shot 和 few-shot 效果。
 
+*参考答案*：
+
+```python
+from openai import OpenAI
+client = OpenAI()
+
+def classify(messages):
+    return client.chat.completions.create(
+        model="gpt-4o-mini", messages=messages, temperature=0
+    ).choices[0].message.content
+
+text = "客服响应很快，问题解决了。"
+# Zero-shot：直接提问 / ask directly
+zs = classify([{"role": "user", "content": f"判断情感(正面/负面)：{text}"}])
+# Few-shot：给示例引导，边界样本更稳 / examples stabilize borderline cases
+fs = classify([
+    {"role": "user", "content": "这个产品太棒了！"}, {"role": "assistant", "content": "正面"},
+    {"role": "user", "content": "今天的晚餐真难吃。"}, {"role": "assistant", "content": "负面"},
+    {"role": "user", "content": text},
+])
+print("zero-shot:", zs, "| few-shot:", fs)
+```
+
 **练习 2：** 设计一个 System Prompt，让模型扮演 Java 代码审查专家。
+
+*参考答案*：
+
+```python
+# System Prompt 设定角色 + 输出结构 / system prompt sets role and output structure
+SYSTEM = """你是一位资深 Java 代码审查专家，精通 Alibaba P3C 规范与并发安全。
+审查代码时严格按以下结构输出：
+1. 严重问题（NPE、线程安全、资源泄漏）
+2. 规范问题（命名、魔法值、集合初始容量）
+3. 性能问题（复杂度、不必要的对象创建）
+4. 改进后的代码
+只指出真实问题，不臆造。"""
+
+messages = [
+    {"role": "system", "content": SYSTEM},
+    {"role": "user", "content": "审查这段代码：\nMap<String,Integer> m = new HashMap<>();"},
+]
+```
 
 ### 进阶题
 
 **练习 3：** 设计一个多步 Prompt 完成复杂任务：先提取关键信息，再生成摘要，最后翻译。
 
+*参考答案*：每步输出作为下一步输入，串成流水线（比单条巨型 prompt 更可控）。
+
+```python
+from openai import OpenAI
+client = OpenAI()
+
+def ask(prompt: str) -> str:
+    return client.chat.completions.create(
+        model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}]
+    ).choices[0].message.content
+
+text = "……一段中文长文章……"
+# Step 1 提取 → Step 2 摘要 → Step 3 翻译 / extract → summarize → translate
+keypoints = ask(f"提取以下文本的 3-5 个关键信息点：\n{text}")
+summary = ask(f"根据这些要点写一段 50 字摘要：\n{keypoints}")
+english = ask(f"将以下摘要翻译成英文：\n{summary}")
+print(english)
+```
+
 **练习 4：** 构建一个 Prompt 评估框架，量化比较不同 prompt 在 50 个测试用例上的准确率。
+
+*参考答案*：把每个 prompt 模板跑过同一组带标签的测试集，统计准确率即可比较。
+
+```python
+from openai import OpenAI
+client = OpenAI()
+
+# 测试集：(输入, 标准答案) / labeled test set
+testset = [("这个产品太棒了！", "正面"), ("太差了", "负面")]  # ... 共 50 条
+
+def run(prompt_tmpl: str, text: str) -> str:
+    return client.chat.completions.create(
+        model="gpt-4o-mini", temperature=0,
+        messages=[{"role": "user", "content": prompt_tmpl.format(text=text)}]
+    ).choices[0].message.content.strip()
+
+def accuracy(prompt_tmpl: str) -> float:
+    # 命中率 = 正确数 / 总数 / accuracy = correct / total
+    hits = sum(gold in run(prompt_tmpl, x) for x, gold in testset)
+    return hits / len(testset)
+
+candidates = {
+    "zero_shot": "判断情感(正面/负面)：{text}",
+    "with_role": "你是情感分析专家，只回答正面或负面。文本：{text}",
+}
+for name, tmpl in candidates.items():
+    print(f"{name}: {accuracy(tmpl):.1%}")
+```

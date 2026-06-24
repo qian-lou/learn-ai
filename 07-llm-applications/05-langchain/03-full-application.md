@@ -152,10 +152,114 @@ LLM 应用上线检查清单：
 
 **练习 1：** 用 Gradio 构建一个翻译应用（中英互译）。
 
+*参考答案*：用一个 LCEL 翻译链做回调，`gr.Interface` 提供输入框与下拉方向选择。
+
+```python
+import gradio as gr
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+chain = (ChatPromptTemplate.from_template("把下面的文本翻译成{target}，只输出译文：\n{text}")
+         | ChatOpenAI(model="gpt-4o-mini", temperature=0) | StrOutputParser())
+
+def translate(text: str, direction: str) -> str:
+    target = "英文" if direction == "中→英" else "中文"
+    return chain.invoke({"text": text, "target": target})
+
+demo = gr.Interface(translate,
+    inputs=[gr.Textbox(label="原文"), gr.Radio(["中→英", "英→中"], value="中→英")],
+    outputs=gr.Textbox(label="译文"), title="🌐 翻译助手")
+# demo.launch()
+```
+
 **练习 2：** 用 FastAPI 构建 LLM API，实现流式输出。
+
+*参考答案*：用 `llm.astream` 异步逐块产出，包进 `StreamingResponse` 以 SSE 推送。
+
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from langchain_openai import ChatOpenAI
+
+app = FastAPI()
+llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
+
+class ChatRequest(BaseModel):
+    message: str
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    async def gen():
+        # astream 异步逐块产出，按 SSE 协议封装 / async token stream as SSE
+        async for chunk in llm.astream(req.message):
+            yield f"data: {chunk.content}\n\n"
+        yield "data: [DONE]\n\n"
+    return StreamingResponse(gen(), media_type="text/event-stream")
+```
 
 ### 进阶题
 
 **练习 3：** 构建完整 RAG 应用：FastAPI 后端 + Gradio 前端 + Chroma 向量库。
 
+*参考答案*：后端把 LCEL 检索链暴露为 `/ask` 接口，前端 Gradio `ChatInterface` 调用该接口。
+
+```python
+# ---- backend.py：FastAPI + Chroma + LCEL ----
+from fastapi import FastAPI
+from pydantic import BaseModel
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+
+vs = Chroma(persist_directory="./db",
+            embedding_function=HuggingFaceEmbeddings(model_name="BAAI/bge-base-zh-v1.5"))
+prompt = ChatPromptTemplate.from_template("依据上下文回答。\n\n上下文：{context}\n\n问题：{input}")
+chain = create_retrieval_chain(
+    vs.as_retriever(search_kwargs={"k": 3}),
+    create_stuff_documents_chain(ChatOpenAI(model="gpt-4o-mini"), prompt))
+
+app = FastAPI()
+class Q(BaseModel):
+    question: str
+
+@app.post("/ask")
+def ask(q: Q):
+    return {"answer": chain.invoke({"input": q.question})["answer"]}
+
+# ---- frontend.py：Gradio 调用后端 / Gradio calls the backend ----
+# import gradio as gr, requests
+# def chat(msg, history):
+#     return requests.post("http://localhost:8000/ask", json={"question": msg}).json()["answer"]
+# gr.ChatInterface(chat, title="📄 文档问答").launch()
+```
+
 **练习 4：** 添加 Token 计费、限流和日志功能，使其可生产部署。
+
+*参考答案*：用 `get_openai_callback` 统计 token/成本，`slowapi` 做限流，标准 `logging` 记录请求。
+
+```python
+import logging
+from fastapi import FastAPI, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from langchain_community.callbacks import get_openai_callback
+
+logging.basicConfig(level=logging.INFO)
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI()
+app.state.limiter = limiter
+
+@app.post("/chat")
+@limiter.limit("10/minute")        # 每 IP 每分钟 10 次 / 10 req/min per IP
+async def chat(request: Request, message: str):
+    # 回调统计 token 与美元成本 / track tokens and USD cost
+    with get_openai_callback() as cb:
+        reply = chain.invoke({"input": message})["answer"]
+    logging.info("tokens=%d cost=$%.4f", cb.total_tokens, cb.total_cost)
+    return {"reply": reply, "tokens": cb.total_tokens}
+```

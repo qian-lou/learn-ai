@@ -112,7 +112,8 @@ from openai import OpenAI
 client = OpenAI()
 
 response = client.chat.completions.create(
-    model="gpt-4-turbo",
+    model="gpt-4o-mini",  # gpt-4-turbo 已换代
+    # 更强约束可用 Structured Outputs：response_format={"type":"json_schema","json_schema":{...}}
     response_format={"type": "json_object"},
     messages=[{
         "role": "user",
@@ -123,6 +124,59 @@ response = client.chat.completions.create(
     }]
 )
 # 输出保证是合法 JSON
+```
+
+### 3.5 推理模型与 Structured Outputs（2024-2025）
+
+```python
+# ============================================================
+# (A) 推理模型：把"思考"交给模型，prompt 只给任务与约束
+#     Reasoning models: delegate the thinking; prompt = task + constraints
+# 代表：OpenAI o 系列 / Claude extended thinking / Gemini thinking / DeepSeek-R1
+#   它们内置长思维链（自回归生成 reasoning tokens），无需手写 CoT。
+#   Built-in long chain-of-thought — no hand-written CoT needed.
+# ============================================================
+# ❌ 反模式：对推理模型再加 "Let's think step by step"
+#    既浪费 token，又干扰其内置推理（容易打断原生 reasoning）。
+#    Anti-pattern: it wastes tokens AND disrupts the native reasoning.
+# ✅ 正确：清晰陈述任务 + 约束，让模型自己规划推理路径。
+from openai import OpenAI
+client = OpenAI()
+
+resp = client.chat.completions.create(
+    model="o4-mini",  # 推理模型 / reasoning model（按需选 o4-mini 等）
+    reasoning_effort="medium",  # low/medium/high：控制思考深度与成本
+    messages=[{"role": "user",
+               "content": "证明：任意 5 个整数中必有 3 个之和被 3 整除。给出严谨步骤。"}],
+)
+print(resp.choices[0].message.content)
+
+# 何时用推理模型 vs 普通模型 / When to use which:
+#   推理模型: 多步数学/算法证明/复杂规划/代码调试 —— 难但可验证的任务。
+#   普通模型(gpt-4o 等): 抽取/分类/改写/对话/RAG —— 快、便宜、低延迟。
+#   经验：能一步答出的别上推理模型（贵且慢）；需要"打草稿"才上。
+
+# ============================================================
+# (B) Structured Outputs：用 json_schema 强约束输出（替代旧 json_object）
+#     旧 {"type":"json_object"} 只保证「是合法 JSON」，不保证字段/类型。
+#     新 json_schema 在解码层强制贴合 schema —— 字段、类型、枚举全约束。
+# ============================================================
+from pydantic import BaseModel
+from typing import List, Literal
+
+class Review(BaseModel):  # Pydantic 即 schema / schema-as-code
+    sentiment: Literal["positive", "negative", "neutral"]
+    topics: List[str]
+    score: int  # 1-5
+
+# parse() 直接回传已校验的 Pydantic 实例 / returns a validated instance
+completion = client.beta.chat.completions.parse(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "评论：环境优雅、服务周到，但价格偏高。"}],
+    response_format=Review,  # 等价于 {"type":"json_schema", "json_schema":{...}}
+)
+review: Review = completion.choices[0].message.parsed
+print(review.sentiment, review.score)  # 直接当对象用，无需再 json.loads
 ```
 
 ## 4. 详细推理（Deep Dive）

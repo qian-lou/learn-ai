@@ -80,7 +80,7 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 # ============================================================
 # 加载已量化的模型
 # model = AutoModelForCausalLM.from_pretrained(
-#     "TheBloke/Llama-2-7B-GPTQ",
+#     "Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4",  # TheBloke 已停更，改用官方/活跃仓库
 #     device_map="auto",
 # )
 ```
@@ -89,13 +89,13 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
 ```bash
 # llama.cpp: 纯 CPU 也能跑大模型
-# 安装
+# 安装（新版用 CMake，make 已弃用）
 # git clone https://github.com/ggerganov/llama.cpp
-# cd llama.cpp && make
+# cd llama.cpp && cmake -B build && cmake --build build -j
 
-# 下载 GGUF 模型（HuggingFace 上有大量）
-# 推理
-# ./main -m model.Q4_K_M.gguf -p "Hello" -n 100
+# 下载 GGUF 模型（推荐 bartowski / unsloth 仓库）
+# 推理（可执行已从 main 改名为 llama-cli）
+# ./build/bin/llama-cli -m model.Q4_K_M.gguf -p "Hello" -n 100
 
 # Python 绑定
 # pip install llama-cpp-python
@@ -106,6 +106,45 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 # llm = Llama(model_path="model.Q4_K_M.gguf", n_ctx=4096, n_gpu_layers=0)
 # output = llm("Hello!", max_tokens=100)
 ```
+
+### 3.4 2024-2025 量化进展：FP8/FP4 · GGUF IQ-quant · torchao
+
+> 2025 年低比特从 INT4 进一步下探到 **8-bit/4-bit 浮点**，并出现硬件原生支持，质量损失显著低于同位宽整数量化。
+> Sub-4-bit moved to floating-point (FP8/FP4) with native hardware support — far less quality loss than same-width integer quant.
+
+**浮点量化 FP8 / FP4（NVIDIA 主线）**
+- **FP8**：两种编码 `E4M3`（1符4阶3尾，范围 ±448，权重/激活首选）与 `E5M2`（5阶2尾，范围 ±57344，动态范围大）。Hopper / Blackwell **原生支持**，W8A8 推理**近无损**。
+  FP8: E4M3 (±448, weights/acts) and E5M2 (wider range); native on Hopper/Blackwell, near-lossless W8A8.
+- **FP4 / NVFP4**：4-bit 微缩放（microscaling）浮点，**Blackwell** 原生，配合 FP8 KV cache 把超大模型压进单机，质量明显优于 INT4。
+  NVFP4: 4-bit microscaling float, Blackwell-native, beats INT4 quality.
+
+```bash
+# 用 llm-compressor 产出 FP8 权重供 vLLM 部署（动态 FP8 无需校准数据）
+# Produce FP8 weights for vLLM via llm-compressor (dynamic FP8 needs no calibration)
+vllm serve Qwen/Qwen2.5-7B-Instruct --quantization fp8   # 在线动态量化 / on-the-fly
+```
+
+**GGUF 的 IQ 系列（极致压缩，CPU/端侧）**
+- `IQ2_XXS` / `IQ3_XXS` / `IQ4_XS`：基于 **importance-matrix（imatrix）** 的非均匀量化，按权重重要性分配码本。
+  imatrix-based non-uniform quant — bits follow weight importance.
+- 同位宽下质量优于老的 `Qn_K`：如 `IQ4_XS` 体积小于 `Q4_K_M` 而困惑度更接近 FP16，适合显存/内存极度紧张的端侧。
+  At equal bits, IQ beats legacy Qn_K — e.g. IQ4_XS is smaller than Q4_K_M yet closer to FP16.
+
+**torchao（PyTorch 原生，一行量化）**
+```python
+# Time: O(N) over params  Space: 权重位宽 32→4，约 -75% 显存 / ~75% VRAM cut
+from torchao.quantization import quantize_, int4_weight_only
+
+# int4 weight-only：仅压权重，激活仍 bf16，走 tinygemm kernel / weight-only, bf16 acts
+quantize_(model, int4_weight_only(group_size=128))   # group_size 越小越准、略增体积
+# int8 weight-only 同理：quantize_(model, int8_weight_only())
+```
+- 高速 kernel：**Marlin**（W4A16/W8A16 GEMM，重叠反量化与计算，batch 256 仍约 2x 加速）、**Machete**（vLLM 为 Hopper 定制的 W4A16/W8A16 kernel）。
+  Fast kernels: Marlin (W4A16/W8A16 GEMM), Machete (vLLM's Hopper W4A16 kernel).
+- **HQQ**（Half-Quadratic Quantization）：**无需校准数据**、量化极快，质量接近需校准的 GPTQ/AWQ。
+  HQQ: calibration-free, very fast, quality near GPTQ/AWQ.
+
+> 仓库更新提示 / repo note：**TheBloke 已停更**，2026 年 GGUF 取自 **bartowski / unsloth**，FP8·NVFP4·GPTQ 取自**官方仓库或 RedHatAI（llm-compressor 产出）**。
 
 ## 4. 详细推理（Deep Dive）
 
@@ -143,10 +182,67 @@ import os
 
 **练习 1：** 用 bitsandbytes 加载 4-bit 量化模型，测量显存占用。
 
+*参考答案*：
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+
+bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                         bnb_4bit_compute_dtype=torch.bfloat16)
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-7B-Instruct", quantization_config=bnb, device_map="cuda")
+# 加载后读取已分配显存 / Read allocated VRAM after loading
+print(f"VRAM: {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB")
+# 7B NF4 权重约 ~4GB；加上激活/KV cache，整机峰值约 5-6GB
+# 7B NF4 weights ≈ ~4GB; with activations/KV cache peak ≈ 5-6GB
+```
+
 **练习 2：** 对比 FP16 和 INT4 模型在同一问题上的回答质量。
+
+*参考答案*：
+
+思路：同一 prompt、同一采样参数（建议 `temperature=0` 贪心解码以保证可复现），分别用 FP16（`torch_dtype=torch.float16`）和 4-bit 模型生成，逐条人工对比。
+
+```python
+# 关键：固定随机性，只让"精度"成为变量 / Fix randomness; precision is the only variable
+out = model.generate(**inputs, do_sample=False, max_new_tokens=256)
+```
+
+观察结论：短问答两者通常几乎无差异；INT4 在长链路推理、数学、代码等任务上偶有退化。客观评测可跑 perplexity 或小型 benchmark（如 MMLU 子集），FP16 ≈ INT8 > AWQ/GPTQ-INT4 ≳ GGUF-Q4。
 
 ### 进阶题
 
 **练习 3：** 用 GGUF 格式在纯 CPU 上运行 7B 模型，测量推理速度。
 
+*参考答案*：
+
+```bash
+# 从 bartowski（TheBloke 已停更）下载 GGUF / Download GGUF from bartowski
+# 例：Qwen2.5-7B-Instruct-Q4_K_M.gguf
+# 可执行已从 main 改名为 llama-cli / binary renamed from main to llama-cli
+./build/bin/llama-cli -m Qwen2.5-7B-Instruct-Q4_K_M.gguf \
+    -p "Explain quantization in one sentence." -n 128 -t 8
+# 运行结束后 llama.cpp 会打印 eval time 与 tokens/s（即 decode 吞吐）
+# llama.cpp prints eval time and tokens/s (decode throughput) at the end
+```
+
+说明：纯 CPU 速度取决于内存带宽与线程数，桌面级 CPU 上 7B-Q4 一般在个位数到十几 tokens/s；IQ 系列（如 IQ4_XS）体积更小、质量接近。也可用 `pip install llama-cpp-python` 在 Python 中自行计时（记录生成 token 数 / 耗时）。
+
 **练习 4：** 用 AutoGPTQ 对一个模型做离线量化，自定义校准数据集。
+
+*参考答案*：
+
+注意：AutoGPTQ 已基本停止维护，2026 年推荐用 **GPTQModel**（社区接棒）或 **llm-compressor / llmcompressor**（兼容 vLLM）做离线量化；AWQ 可用 `autoawq`。下面用 GPTQModel 演示自定义校准集（校准数据应贴近真实业务分布）。
+
+```python
+from gptqmodel import GPTQModel, QuantizeConfig
+
+# 校准数据：几百条代表性文本即可 / a few hundred representative samples suffice
+calib = ["你的领域语料样本 1", "sample 2", "..."]
+cfg = QuantizeConfig(bits=4, group_size=128)  # per-group 量化，质量最佳
+model = GPTQModel.load("Qwen/Qwen2.5-7B-Instruct", cfg)
+model.quantize(calib)
+model.save("./Qwen2.5-7B-GPTQ-Int4")
+# group_size=128 是质量/体积的常用折中 / common quality-size trade-off
+```

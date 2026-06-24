@@ -55,9 +55,9 @@ Prompt 模板：
 
 ```python
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings  # 独立包，替代 community
+from langchain_chroma import Chroma                       # 独立包，替代 community
 
 # ============================================================
 # Step 1-2: 加载并分割文档
@@ -112,6 +112,63 @@ RAG:
   RAG:  提供最新的事实性知识
 ```
 
+### 3.4 2024-2025 RAG 进展：现代 embedding · reranker · agentic RAG
+
+```python
+# ============================================================
+# (A) 现代 embedding：bge-base-zh-v1.5 已被取代
+#     Modern embeddings (bge-base-zh-v1.5 is superseded)
+#   开源: BAAI/bge-m3（多语言/多粒度长文本/支持 dense+sparse+多向量混合检索）、
+#         Qwen3-Embedding（多语言、可指令化）。
+#   商用 API: voyage-3 / voyage-3-large、OpenAI text-embedding-3-large。
+# ============================================================
+from langchain_huggingface import HuggingFaceEmbeddings
+# bge-m3 一模型即可同时做语义(dense)+词面(sparse)混合检索
+# bge-m3: one model for hybrid dense + sparse retrieval
+embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-m3")
+
+# ============================================================
+# (B) 二阶段精排 reranker：先粗召回，再用 cross-encoder 精排
+#     Two-stage rerank: coarse recall → cross-encoder fine ranking
+#   bge-reranker-v2-m3 同时编码 (query, doc)，精度远高于双塔召回。
+# ============================================================
+from sentence_transformers import CrossEncoder
+
+reranker = CrossEncoder("BAAI/bge-reranker-v2-m3")  # v2-m3 取代旧 reranker-base
+query = "项目的技术架构是什么？"
+candidates = vectorstore.similarity_search(query, k=20)        # 粗召回 / recall
+scores = reranker.predict([(query, d.page_content) for d in candidates])
+top3 = [d for _, d in sorted(zip(scores, candidates),
+                             key=lambda x: x[0], reverse=True)][:3]  # 精排取 3
+
+# ============================================================
+# (C) 更前沿的范式 / Frontier paradigms
+# ------------------------------------------------------------
+# 1) Contextual Retrieval（Anthropic, 2024）：入库前给每个 chunk 拼接
+#    "该 chunk 在整篇文档中的位置/作用"上下文，再 embedding，显著降低召回失败率。
+#    Prepend doc-level context to each chunk before embedding.
+def contextualize(doc_summary: str, chunk: str) -> str:
+    """给 chunk 注入文档级上下文 / inject document-level context."""
+    return f"文档背景：{doc_summary}\n该片段内容：{chunk}"
+
+# 2) GraphRAG / RAPTOR：先把语料聚类成"层级摘要树/知识图谱"，
+#    回答全局型问题（"总结整本书主题"）时检索高层摘要而非零散 chunk。
+# 3) Agentic / multi-hop RAG：用 LangGraph 让 Agent 自主决定
+#    "要不要检索、检索什么、是否需要再检索一轮"，而非固定一次 retrieve。
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+@tool
+def retrieve(q: str) -> str:
+    """按需检索知识库 / retrieve from KB on demand."""
+    docs = vectorstore.similarity_search(q, k=3)
+    return "\n".join(d.page_content for d in docs)
+
+# Agent 自行多跳检索，适合需要分解的复杂问题 / autonomous multi-hop retrieval
+agent = create_react_agent(ChatOpenAI(model="gpt-4o-mini"), tools=[retrieve])
+```
+
 ## 4. 详细推理（Deep Dive）
 
 ### 4.1 Chunking 策略
@@ -132,18 +189,23 @@ Chunk 大小的权衡：
 ## 5. 例题（Worked Examples）
 
 ```python
-# 完整 RAG Pipeline
-from langchain.chains import RetrievalQA
+# 完整 RAG Pipeline（LCEL，替代已废弃的 RetrievalQA）
+# Modern RAG via LCEL (replaces deprecated RetrievalQA)
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
 
-qa_chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
-    return_source_documents=True,
+prompt = ChatPromptTemplate.from_template(
+    "根据以下上下文回答问题。\n\n上下文：{context}\n\n问题：{input}"
+)
+combine_chain = create_stuff_documents_chain(llm, prompt)
+qa_chain = create_retrieval_chain(
+    vectorstore.as_retriever(search_kwargs={"k": 3}), combine_chain
 )
 
-result = qa_chain.invoke({"query": "项目的技术架构是什么？"})
-print(f"回答: {result['result']}")
-print(f"来源: {result['source_documents'][0].metadata}")
+result = qa_chain.invoke({"input": "项目的技术架构是什么？"})
+print(f"回答: {result['answer']}")
+print(f"来源: {result['context'][0].metadata}")
 ```
 
 ## 6. 习题（Exercises）
@@ -152,10 +214,81 @@ print(f"来源: {result['source_documents'][0].metadata}")
 
 **练习 1：** 构建一个基于 PDF 文档的 RAG 问答系统。
 
+*参考答案*：组合 3.2 的检索与 5 节的 LCEL 生成链，得到端到端问答。
+
+```python
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings  # 独立包 / standalone pkg
+from langchain_chroma import Chroma                       # 独立包 / standalone pkg
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+
+chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)\
+    .split_documents(PyPDFLoader("document.pdf").load())
+vs = Chroma.from_documents(chunks, HuggingFaceEmbeddings(model_name="BAAI/bge-base-zh-v1.5"))
+
+prompt = ChatPromptTemplate.from_template("根据上下文回答。\n\n上下文：{context}\n\n问题：{input}")
+# LCEL 检索链，替代已废弃的 RetrievalQA / modern chain replacing deprecated RetrievalQA
+chain = create_retrieval_chain(
+    vs.as_retriever(search_kwargs={"k": 3}),
+    create_stuff_documents_chain(ChatOpenAI(model="gpt-4o-mini"), prompt))
+print(chain.invoke({"input": "文档的主要内容是什么？"})["answer"])
+```
+
 **练习 2：** 对比 chunk_size=200 和 chunk_size=1000 的检索效果。
+
+*参考答案*：用同一文档、同一 query 切两套向量库观察召回片段。chunk 小则片段零碎、上下文不足；chunk 大则单片信息全但易混入噪音。
+
+```python
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+
+emb = HuggingFaceEmbeddings(model_name="BAAI/bge-base-zh-v1.5")
+query = "项目的技术架构是什么？"
+for size in (200, 1000):
+    chunks = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=50)\
+        .split_documents(docs)  # docs 为已加载文档 / preloaded docs
+    # 每套独立 collection，避免互相污染 / separate collections to avoid cross-contamination
+    vs = Chroma.from_documents(chunks, emb, collection_name=f"c{size}")
+    top = vs.similarity_search(query, k=3)
+    print(f"[chunk_size={size}] 命中片段长度 {[len(d.page_content) for d in top]}")
+```
 
 ### 进阶题
 
 **练习 3：** 实现 Hybrid Search（关键词搜索 + 向量搜索结合）。
 
+*参考答案*：用 `EnsembleRetriever` 加权融合 BM25（关键词）与向量检索，兼顾精确匹配与语义召回。
+
+```python
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
+
+bm25 = BM25Retriever.from_documents(chunks)   # 关键词 / lexical
+bm25.k = 5
+vector = vs.as_retriever(search_kwargs={"k": 5})  # 语义 / semantic
+# 加权融合：关键词 30% + 语义 70% / weighted fusion
+hybrid = EnsembleRetriever(retrievers=[bm25, vector], weights=[0.3, 0.7])
+docs = hybrid.invoke("项目的技术架构是什么？")
+```
+
 **练习 4：** 添加 Re-ranking（用 Cross-Encoder 对检索结果重排序）。
+
+*参考答案*：先粗召回 Top-20，再用 Cross-Encoder 对 (query, doc) 打分精排取 Top-3。Cross-Encoder 同时编码两句话，精度高于双塔召回。
+
+```python
+from sentence_transformers import CrossEncoder
+
+reranker = CrossEncoder("BAAI/bge-reranker-base")
+query = "项目的技术架构是什么？"
+candidates = vs.similarity_search(query, k=20)            # 粗召回 / coarse recall
+
+# 对每个 (query, doc) 打相关性分 / score each (query, doc) pair
+scores = reranker.predict([(query, d.page_content) for d in candidates])
+ranked = sorted(zip(scores, candidates), key=lambda x: x[0], reverse=True)
+top3 = [doc for _, doc in ranked[:3]]                     # 精排取前 3 / keep top-3
+```

@@ -20,7 +20,7 @@
 
 **核心要点：**
 - Python 2 已于 2020 年停止维护，**只学 Python 3**
-- 大模型开发推荐 Python **3.10 或 3.11**（兼容性最佳）
+- 大模型开发推荐 Python **3.11 或 3.12**（2026 年 PyTorch / vLLM / transformers 均已稳定支持 3.12；3.13 free-threading 也已 stable）/ recommend 3.11/3.12 in 2026
 - macOS/Linux 自带的 Python **不要动**，用 pyenv 管理独立版本
 
 ## 3. 内容（Content）
@@ -29,17 +29,18 @@
 
 ```
 Python 版本选择决策树：
-                    ┌─ 需要最新特性？ ─→ Python 3.12
+                    ┌─ 需要最新特性 / free-threading？ ─→ Python 3.13
                     │
-你要学大模型 ──────┼─ 需要最佳兼容性？ ─→ Python 3.10 / 3.11 ✅ 推荐
+你要学大模型 ──────┼─ 需要最佳兼容性？ ─→ Python 3.11 / 3.12 ✅ 推荐
                     │
-                    └─ 维护老项目？ ─→ Python 3.8 / 3.9
+                    └─ 维护老项目？ ─→ Python 3.8 / 3.9 / 3.10
 ```
 
-**为什么推荐 3.10/3.11？**
-- PyTorch、TensorFlow 对这两个版本支持最稳定
-- Hugging Face Transformers 官方测试基于 3.10+
-- 3.10 引入了 `match-case` 语法（类似 Java 的 `switch` 增强版）
+**为什么推荐 3.11/3.12？**
+- 2026 年 PyTorch、vLLM、Hugging Face Transformers 均已稳定支持 3.12，TensorFlow 同样覆盖 / all stable on 3.12 by 2026
+- 3.11 起解释器显著提速（CPython faster-cpython 计划），3.12 进一步优化
+- 3.13 的 free-threading（无 GIL）已转 stable，但生态适配仍在推进，求稳选 3.11/3.12
+- `match-case`（3.10 引入，类似 Java `switch` 增强版）等现代语法在 3.11/3.12 一应俱全
 
 ### 3.2 安装方式对比
 
@@ -66,10 +67,10 @@ source ~/.zshrc
 
 # 查看可安装的 Python 版本
 # List available Python versions
-pyenv install --list | grep "3\.\(10\|11\)"
+pyenv install --list | grep "3\.\(11\|12\)"
 
-# 安装 Python 3.11.7
-# Install Python 3.11.7
+# 安装 Python 3.11.7（patch 号仅为示例，请以 `pyenv install --list` 最新 patch 为准）
+# Install Python 3.11.7 (patch is illustrative; use the latest patch from `pyenv install --list`)
 pyenv install 3.11.7
 
 # 设置全局默认版本

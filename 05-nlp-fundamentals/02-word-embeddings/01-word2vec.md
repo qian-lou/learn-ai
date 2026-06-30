@@ -118,7 +118,7 @@ import gensim.downloader as api
   负样本: (center="sat", random="banana") → 标签 0（随机采样 5-20 个）
   
   用 sigmoid 二分类代替 softmax 多分类
-  训练速度提升 100x+
+  提速幅度 ≈ 词表 V / 负采样数 K（V 上万、K 取 5-20，故可达百倍量级）
 ```
 
 ### 3.4 Word2Vec 与 nn.Embedding 的关系

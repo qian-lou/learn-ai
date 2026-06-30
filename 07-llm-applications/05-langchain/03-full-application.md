@@ -73,12 +73,17 @@ def chatbot(message, history):
 
 demo = gr.ChatInterface(
     chatbot,
+    type="messages",                # Gradio 4/5 推荐用 messages 格式（history 为 OpenAI 风格 dict 列表）
     title="🤖 AI 助手",
     description="基于大模型的智能对话",
     examples=["介绍一下机器学习", "写一首关于春天的诗"],
     theme="soft",
 )
 # demo.launch(server_port=7860, share=True)
+
+# 版本提示：Gradio 4/5 的 ChatInterface 推荐 type="messages"（旧默认 "tuples" 已弃用）；
+# 回调返回字符串或字典（如 {"role": "assistant", "content": ...}）均可。
+# Note: on Gradio 4/5 prefer type="messages"; the callback may return a str or a dict.
 ```
 
 ### 3.3 Streamlit 数据应用

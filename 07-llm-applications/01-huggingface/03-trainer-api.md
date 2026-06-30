@@ -29,6 +29,8 @@ from transformers import (
 )
 from datasets import load_dataset
 import numpy as np
+# compute_metrics 用到 sklearn 指标，需单独安装：pip install scikit-learn
+# sklearn metrics below require a separate install: pip install scikit-learn
 from sklearn.metrics import accuracy_score, f1_score
 
 # ============================================================
@@ -69,7 +71,8 @@ training_args = TrainingArguments(
     learning_rate=2e-5,
     weight_decay=0.01,
     warmup_ratio=0.1,
-    eval_strategy="epoch",
+    eval_strategy="epoch",          # transformers 4.46+ 由 evaluation_strategy 改名；老版本请用 evaluation_strategy
+                                    # renamed from evaluation_strategy in transformers 4.46+; use the old name on older versions
     save_strategy="epoch",
     load_best_model_at_end=True,
     metric_for_best_model="f1",

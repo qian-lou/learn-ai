@@ -17,6 +17,11 @@
 | Milvus | 分布式 | 云原生，生产级 | 十亿+ |
 | Pinecone | 云服务 | 全托管 | 任意 |
 | pgvector | 扩展 | PostgreSQL 扩展 | 百万级 |
+| Qdrant | 分布式 | Rust 实现，高性能、过滤（payload filter）能力强 / Rust-based, high perf, strong filtering | 千万-十亿 |
+| Weaviate | 分布式 | 内置混合检索（向量+BM25）、模块化（可插拔 embedder） / built-in hybrid search, modular | 千万+ |
+| LanceDB | 内嵌型 | 嵌入式列存（Lance 格式），多模态友好、零运维 / embedded columnar store, multimodal-friendly | 百万-千万 |
+
+> **2024-2025 增长最快的三家：** Qdrant、Weaviate、LanceDB。Qdrant 以 Rust 性能 + 强过滤见长；Weaviate 主打开箱即用的混合检索与模块化；LanceDB 走嵌入式列存路线，适合多模态与本地/边缘场景。
 
 ## 3. 内容（Content）
 

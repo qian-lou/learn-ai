@@ -183,8 +183,9 @@ QK^T 矩阵乘法: [B, N, D] × [B, D, N] = [B, N, N]
 最大路径长度     O(1)              O(N)
 训练速度         快（GPU 利用率高）  慢（顺序瓶颈）
 
-当 N < D 时（大模型通常如此），Self-Attention 更高效
-GPT-3: D=12288, 典型 N=2048 → N < D ✅
+当 N < D 时每层 FLOPs 也更少（O(N²·D) vs O(N·D²)，比值 N/D）
+但 Self-Attention 的核心优势是并行与 O(1) 路径长度，而非单纯算量
+GPT-3: D=12288, 典型 N=2048 → N < D
 ```
 
 ## 5. 例题（Worked Examples）

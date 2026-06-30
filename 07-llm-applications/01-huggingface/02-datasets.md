@@ -89,7 +89,11 @@ tokenized.set_format("torch")
 # ============================================================
 # 流式加载（不会 OOM）/ Streaming (no OOM)
 # ============================================================
-stream = load_dataset("c4", "en", split="train", streaming=True)
+# 旧的 "c4" 数据集脚本已迁移到 allenai/c4，需指定语言子集 + trust_remote_code
+# The bare "c4" dataset moved to allenai/c4; pass the lang config + trust_remote_code
+stream = load_dataset("allenai/c4", "en", split="train", streaming=True, trust_remote_code=True)
+# 也可换用更现代的预训练语料 HuggingFaceFW/fineweb-edu
+# Or use the more modern pretraining corpus HuggingFaceFW/fineweb-edu
 
 # 流式数据集是迭代器，按需加载
 for i, example in enumerate(stream):

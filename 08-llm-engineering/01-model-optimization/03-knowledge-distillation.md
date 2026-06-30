@@ -90,6 +90,8 @@ class DistillationLoss(nn.Module):
   成本: 训练 GPT-3.5 级别模型 < $100
 ```
 
+> **2024-2025 现代蒸馏主线 / Modern distillation (2024-2025)：** 不再局限于 BERT→DistilBERT 的老套路，主流是「强模型（GPT-4 / Claude）→ 小模型」的**数据蒸馏**，并叠加 **on-policy distillation**——让 Student 先生成，再用 Teacher 对 Student 自己的输出打分/纠正（如 MiniLLM 的 reverse-KL、DistillKit / 各家 distillation 工具链），比纯离线静态数据更能贴合 Student 分布、缓解 exposure bias。
+
 ## 4. 详细推理（Deep Dive）
 
 ### 4.1 Temperature 的作用

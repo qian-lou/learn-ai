@@ -197,7 +197,7 @@ from torch.nn.functional import cosine_similarity
 
 # 相邻位置相似度高
 sim_1 = cosine_similarity(pe[10:11], pe[11:12]).item()
-# 远距离位置相似度低
+# 远距离位置相似度低（正弦 PE 相似度随距离大致衰减但会振荡，仅作直觉验证、非严格单调）
 sim_50 = cosine_similarity(pe[10:11], pe[60:61]).item()
 print(f"距离 1 的相似度: {sim_1:.4f}")
 print(f"距离 50 的相似度: {sim_50:.4f}")

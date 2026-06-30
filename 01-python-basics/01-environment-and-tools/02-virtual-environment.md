@@ -27,7 +27,7 @@
 | venv | 内置虚拟环境 | 无需额外安装 | 功能简单 | ⭐⭐⭐ |
 | conda | 包 + 环境管理 | 可管理非 Python 依赖（CUDA） | 与 pip 混用易冲突 | ⭐⭐⭐⭐ |
 | poetry | 现代项目管理 | 类似 Maven，功能完整 | 学习曲线 | ⭐⭐⭐⭐ |
-| uv | 新一代包管理 | Rust 实现，极快 | 较新，生态未完全覆盖 | ⭐⭐⭐⭐⭐ |
+| uv | 新一代包管理 | Rust 实现，极快 | 2025 起已成事实标准，社区/工具链全面跟进 | ⭐⭐⭐⭐⭐ |
 
 ## 3. 内容（Content）
 
@@ -86,9 +86,9 @@ deactivate
 ### 3.2 conda 环境管理
 
 ```bash
-# 安装 Miniconda（推荐，比 Anaconda 轻量）
-# Install Miniconda (recommended, lighter than Anaconda)
-brew install miniconda
+# 安装 Miniconda（推荐，比 Anaconda 轻量；Homebrew 中 miniconda 是 cask，需加 --cask）
+# Install Miniconda (lighter than Anaconda; it's a cask in Homebrew, so use --cask)
+brew install --cask miniconda
 
 # 创建环境并指定 Python 版本
 # Create environment with specific Python version
@@ -98,10 +98,13 @@ conda create -n llm-dev python=3.11
 # Activate environment
 conda activate llm-dev
 
-# 安装包（conda 可以安装 CUDA 等非 Python 依赖）
-# Install packages (conda can install non-Python dependencies like CUDA)
-conda install pytorch torchvision torchaudio -c pytorch
+# 装非 Python 依赖（CUDA 工具链等）仍可用 conda
+# Use conda for non-Python deps (CUDA toolkit, etc.)
 conda install numpy pandas matplotlib
+
+# 注意：PyTorch 官方已弃用 conda 渠道（pytorch channel 不再更新），改用 pip + 官方 index-url
+# Note: PyTorch deprecated its conda channel; install via pip with the official index-url
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # 导出环境
 # Export environment
@@ -332,8 +335,10 @@ echo "__pycache__/" >> .gitignore
 conda create -n torch-gpu python=3.11 -y
 conda activate torch-gpu
 
-# 安装支持 CUDA 的 PyTorch（conda 会自动安装对应的 CUDA Toolkit）
-conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+# 安装支持 CUDA 的 PyTorch
+# 注意：PyTorch 官方已弃用 conda 渠道，现推荐在 conda 环境里直接用 pip 装
+# Note: PyTorch deprecated conda; install via pip even inside a conda env
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # 验证 GPU
 python -c "

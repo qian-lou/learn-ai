@@ -408,7 +408,8 @@ deep = nn.Sequential(
 
 print(f"浅层参数量 / Shallow params: {sum(p.numel() for p in shallow.parameters())}")
 print(f"深层参数量 / Deep params: {sum(p.numel() for p in deep.parameters())}")
-# 深层用更少的参数也能学到好的表示！
+# 深层窄网络参数更少；但"深 vs 宽"高度依赖任务——
+# 简单 2D 任务上宽网络往往更稳，勿当普适结论 / depth-vs-width is task-dependent
 ```
 
 ## 6. 习题（Exercises）

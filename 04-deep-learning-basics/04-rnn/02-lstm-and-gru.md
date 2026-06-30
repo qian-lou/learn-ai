@@ -161,6 +161,8 @@ print(f"GRU 输出: {output.shape}")  # [32, 50, 512]
   RNN:   (128+256)*256 + 256     = 98,560
   GRU:   3 × [(128+256)*256 + 256] = 295,680
   LSTM:  4 × [(128+256)*256 + 256] = 394,240
+  注：以上为教科书公式（单 bias）；PyTorch nn.LSTM/GRU 每门含 ih/hh 两个 bias，
+      实际参数多 K×hidden（K=4/3），用 count_parameters 验证会略高
 ```
 
 ## 4. 详细推理（Deep Dive）

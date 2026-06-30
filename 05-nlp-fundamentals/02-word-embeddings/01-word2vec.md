@@ -8,6 +8,8 @@
 >
 > Transformer 中的 `nn.Embedding` 层，本质上就是 Word2Vec 思想的延续。理解 Word2Vec 对理解大模型的嵌入层至关重要。
 >
+> 对于 Java 工程师来说，嵌入表就像一个 `HashMap<String, float[]>`——按词查一个稠密向量；区别是这些向量是训练学出来的，语义相近的词向量在空间中也相近（`king - man + woman ≈ queen`）。
+>
 > **在整个体系中的位置：** Word2Vec 是从 TF-IDF 到 BERT 的关键桥梁。它首次证明了"词嵌入空间中的线性关系可以编码语义"。
 
 ## 2. 知识点（Key Concepts）

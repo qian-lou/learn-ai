@@ -6,6 +6,8 @@
 >
 > T5（Text-to-Text Transfer Transformer，2019，Google）提出了一个优雅的统一范式：**所有 NLP 任务都是"文本到文本"**。分类、翻译、摘要、问答——统统转换为输入一段文本、输出一段文本。这个思想深刻影响了后续的 FLAN、ChatGPT 等模型。
 >
+> 对于 Java 工程师来说，"文本到文本"就像把所有业务都收敛到同一个 `Function<String, String>` 接口——不再为分类/翻译/摘要各写一套 API，统一入口靠 prompt 前缀路由不同任务。
+>
 > 同时，开源大模型生态正在爆发：LLaMA（Meta）、Qwen（阿里）、Mistral、DeepSeek 等模型提供了 GPT-4 的替代方案。理解这些模型的异同对技术选型至关重要。
 >
 > **在整个体系中的位置：** T5 代表 Encoder-Decoder 路线，LLaMA/Qwen 代表开源 Decoder-only 路线。

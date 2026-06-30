@@ -6,6 +6,8 @@
 >
 > 机器翻译（Machine Translation）是 **Transformer 诞生的背景**——"Attention Is All You Need" 就是在机器翻译任务上验证的。通过实战完整的翻译项目，串联 Tokenization → Embedding → Encoder-Decoder → Attention → 生成 的全部知识。
 >
+> 对于 Java 工程师来说，Encoder-Decoder ≈ 一次"编码请求→解码响应"的管道：Encoder 把源句压成内部表示（类似把请求序列化成中间态），Decoder 再逐 token 解码出目标句。
+>
 > **在整个体系中的位置：** 机器翻译是 Seq2Seq 的经典应用。从 RNN+Attention 到 Transformer，翻译见证了 NLP 最重要的架构变革。
 
 ## 2. 知识点（Key Concepts）

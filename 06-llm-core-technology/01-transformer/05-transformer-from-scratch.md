@@ -6,6 +6,8 @@
 >
 > 阅读论文和看代码是两回事——**动手实现**才能真正理解 Transformer 的每一个细节。本节将从零构建一个完整的 GPT-style Transformer，不使用任何高级封装（如 `nn.TransformerEncoder`）。
 >
+> 对于 Java 工程师来说，堆叠 N 个 Transformer Block ≈ Servlet 的 Filter Chain：每层对隐状态做一次变换再传给下一层，`nn.Sequential`/`nn.ModuleList` 就像把一串 Filter 注册进链条。
+>
 > 这也是 AI 面试的高频考点：能否从零写出一个可运行的 Transformer？
 >
 > **在整个体系中的位置：** 这是前四节知识的综合实践。完成这个实现后，你将具备阅读 LLaMA、GPT 等开源模型源码的能力。

@@ -7,6 +7,8 @@
 > 基础 Prompt 技巧解决简单任务，但复杂推理需要**高级策略**。Chain-of-Thought（思维链）让 GPT-4 的数学能力提升 30%，ReAct 让模型能够调用工具完成真实任务。
 >
 > 这些技巧是构建 AI Agent 的理论基础。
+>
+> 对于 Java 工程师来说：Self-Consistency ≈ 集群多副本"多数表决"（跑 N 次取众数提高可靠性）；ReAct ≈ Controller 的请求循环——调用 Service(工具)、看返回、再决定下一步，直到给出最终响应。
 
 ## 2. 知识点（Key Concepts）
 

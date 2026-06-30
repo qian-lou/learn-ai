@@ -8,6 +8,8 @@
 >
 > 类比：单头注意力像一只眼睛看世界，多头注意力像一个复眼——从多个角度同时观察，综合得到更丰富的信息。
 >
+> 对于 Java 工程师来说，多头 ≈ 一次 fork-join：把 d_model 切成 h 份交给 h 个"worker"（头）各算各的注意力，最后 concat 合并——类似 `parallelStream().map(...)` 并行处理再汇总。
+>
 > **在整个体系中的位置：** Multi-Head Attention 是 Transformer Block 的第一个子层。GPT-3 有 96 个头，BERT-base 有 12 个头。
 
 ## 2. 知识点（Key Concepts）

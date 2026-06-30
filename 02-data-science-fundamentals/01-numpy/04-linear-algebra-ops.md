@@ -106,10 +106,64 @@ SVD 与 LoRA:
   → LoRA 本质是在低秩空间中更新权重
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用 NumPy 实现最小二乘法线性回归：`w = (X^T X)^{-1} X^T y`。
+### 例题 1：线性方程组求解与矩阵求逆 / Solving Linear Systems and Matrix Inversion
 
-**练习 2：** 用 `einsum` 实现 Attention Score 计算。
+本例题演示如何使用 NumPy 的线性代数模块求解方程组 $Ax = b$ 并求矩阵 $A$ 的逆。
 
-**练习 3：** 对一个大矩阵做 SVD，观察奇异值的衰减速度，验证"低秩假设"。
+```python
+import numpy as np
+
+# 定义系数矩阵 A 和常数向量 b / Define coefficient matrix A and constant vector b
+A = np.array([[2, 1], [1, 3]])  # Shape: [2, 2]
+b = np.array([5, 8])            # Shape: [2]
+
+# 1. 求解 Ax = b / Solve Ax = b
+# Time: O(D^3) - D 为矩阵维度 / D is matrix dimension.
+# Space: O(D^2)
+x = np.linalg.solve(A, b)  # [1.4, 2.2]
+
+# 2. 求 A 的逆矩阵并验证 / Compute inverse of A and verify
+# Time: O(D^3), Space: O(D^2)
+A_inv = np.linalg.inv(A)
+I_test = np.dot(A, A_inv)  # 应接近单位矩阵 / Should be identity matrix.
+
+print(f"方程组的解 / Solution: {x}")
+print(f"A 的逆矩阵 / Inverse matrix A_inv:\n{A_inv}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：计算两个二维矩阵 `A = [[1, 2], [3, 4]]` 和 `B = [[5, 6], [7, 8]]` 的矩阵乘积。
+*参考答案*：
+```python
+import numpy as np
+A = np.array([[1, 2], [3, 4]])
+B = np.array([[5, 6], [7, 8]])
+# Time: O(N^3), Space: O(N^2)
+C = np.dot(A, B)  # 或 A @ B
+print(C)
+```
+
+### 进阶题
+**练习 2**：在主成分分析（PCA）中，需要计算特征协方差矩阵的特征值与特征向量。生成一个 10x10 的对称正定协方差矩阵，使用 NumPy 计算其特征值和特征向量，并按特征值从大到小对特征向量进行排序。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(D^3), Space: O(D^2)
+# 随机生成对称正定矩阵
+X = np.random.randn(10, 10)
+cov = np.dot(X, X.T)  # Shape: [10, 10]
+
+# 计算特征值和特征向量
+eigenvalues, eigenvectors = np.linalg.eigh(cov)
+
+# 降序排列索引
+idx = np.argsort(eigenvalues)[::-1]
+sorted_eigenvalues = eigenvalues[idx]
+sorted_eigenvectors = eigenvectors[:, idx]
+
+print(f"最大特征值: {sorted_eigenvalues[0]:.4f}")
+```\n

@@ -74,8 +74,56 @@ X_selected = selector.fit_transform(X_train, y_train)
   但数据清洗和预处理仍然重要！
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用 ColumnTransformer 对混合类型数据做预处理。
+### 例题 1：文本及类别特征的离散化和特征选择 / Encoding and Feature Selection
 
-**练习 2：** 用 PCA 将 MNIST 从 784 维降到 50 维，对比分类准确率。
+本例题在含有空值、类别字段和长尾数值的数据集上，组合使用独热编码 (One-Hot) 与方差阈值过滤特征。
+
+```python
+import pandas as pd
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.feature_selection import VarianceThreshold
+
+# 1. 制造类别与数值混合数据 / Construct dataframe
+data = pd.DataFrame({
+    'city': ['Beijing', 'Shanghai', 'Beijing', 'Guangzhou'],
+    'level': ['High', 'Low', 'High', 'High'],
+    'const_feat': [1.0, 1.0, 1.0, 1.0]  # 无信息量常量特征 / Low variance feature
+})
+
+# 2. 执行 OneHot 编码 / One-Hot Encoding
+# Time: O(N * C), Space: O(N * C_encoded)
+encoder = OneHotEncoder(sparse_output=False)
+encoded_feat = encoder.fit_transform(data[['city', 'level']])
+encoded_df = pd.DataFrame(encoded_feat, columns=encoder.get_feature_names_out())
+
+# 3. 合并特征并利用 VarianceThreshold 剔除零方差特征 / Feature Selection
+all_feats = pd.concat([encoded_df, data[['const_feat']]], axis=1)
+# Time: O(N * D), Space: O(N * D)
+selector = VarianceThreshold(threshold=0.0)
+selected_feats = selector.fit_transform(all_feats)
+
+print(f"编码合并后特征数 / Raw feature count: {all_feats.shape[1]}")
+print(f"方差过滤后特征数 / Selected feature count: {selected_feats.shape[1]}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：在预处理类别特征时，`OneHotEncoder`（独热编码）与 `LabelEncoder`（标签编码）最适合什么场景？
+*参考答案*：
+- **OneHotEncoder**：适用于无大小顺序关系的离散类别特征（例如城市、职业）。
+- **LabelEncoder**：主要用于一维的目标标签 `y` 的数值映射；如果是输入特征，若有大小等级顺序（例如学历：高中 1/大学 2），建议使用 `OrdinalEncoder`。
+
+### 进阶题
+**练习 2**：在回归问题中，目标变量呈长尾幂律分布（非正态分布），这会导致最小二乘法效果变差。请问该怎么对目标变量进行特征处理？写出 Python 处理代码。
+*参考答案*：
+一般使用对数变换 $y_{new} = \ln(y + 1)$ 将其转化为偏度较小的分布，在预测阶段再进行逆指数变换还原 $y = e^{y_{new}} - 1$。
+```python
+import numpy as np
+# 特征转换 / Forward transform
+y_transformed = np.log1p(y)
+# 推理还原 / Inverse transform
+y_original = np.expm1(y_transformed)
+```\n

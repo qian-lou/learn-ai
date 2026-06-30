@@ -109,10 +109,56 @@ PyTorch autograd 自动计算这个链式:
   loss.backward() → 自动对所有参数计算梯度
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 手动实现梯度下降求解线性回归。
+### 例题 1：从零用梯度下降法寻找多元 Rosenbrock 函数的极小值 / Gradient descent optimization of Rosenbrock function
 
-**练习 2：** 对比 SGD 和 Adam 的收敛速度。
+本例演示梯度下降的核心原理，求解著名的香蕉函数（Rosenbrock function）的极小值，公式为 $f(x, y) = (a-x)^2 + b(y-x^2)^2$。
 
-**练习 3：** 实现 Warmup + Cosine Decay 学习率调度器。
+```python
+import numpy as np
+
+# Rosenbrock 函数及其梯度 / Rosenbrock function and its gradient
+# Time: O(1), Space: O(1)
+def f(x: float, y: float) -> float:
+    return (1.0 - x)**2 + 100.0 * (y - x**2)**2
+
+def grad_f(x: float, y: float) -> np.ndarray:
+    df_dx = -2.0 * (1.0 - x) - 400.0 * x * (y - x**2)
+    df_dy = 200.0 * (y - x**2)
+    return np.array([df_dx, df_dy])
+
+# 梯度下降循环 / Gradient descent loop
+# Time: O(Steps), Space: O(1)
+lr = 0.001
+epochs = 5000
+p = np.array([-1.2, 1.0])  # 起始点 / Starting point
+
+for step in range(epochs):
+    g = grad_f(p[0], p[1])
+    p = p - lr * g  # 权重更新公式 / Parameter update formula
+    if step % 1000 == 0:
+        print(f"Step {step}: f({p[0]:.4f}, {p[1]:.4f}) = {f(p[0], p[1]):.6f}")
+
+print(f"最终收敛点 / Convergence point: {p}")  # 理论极小值在 (1, 1)
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：一元函数 $f(x) = x^2 - 4x + 4$。写出它的导数，并说明导数为 0 处的极值点。
+*参考答案*：
+导数 $f'(x) = 2x - 4$。令 $2x - 4 = 0$，解得 $x = 2$。因为二阶导数 $f''(x) = 2 > 0$，所以 $x=2$ 是极小值点，极小值为 0。
+
+### 进阶题
+**练习 2**：在机器学习反向传播中，已知激活函数为 Sigmoid 且输出为 $a = \sigma(z)$，损失函数为二元交叉熵损失 $L = -[y\ln a + (1-y)\ln(1-a)]$。利用链式法则，推导损失函数对网络输入 $z$ 的偏导数 $rac{\partial L}{\partial z}$，并给出最终化简表达式。
+*参考答案*：
+根据链式法则：
+$rac{\partial L}{\partial z} = rac{\partial L}{\partial a} \cdot rac{\partial a}{\partial z}$
+1. 计算第一项：$rac{\partial L}{\partial a} = -rac{y}{a} + rac{1-y}{1-a} = rac{a-y}{a(1-a)}$
+2. 计算第二项：Sigmoid 的导数为 $rac{\partial a}{\partial z} = a(1-a)$
+3. 相乘化简得：$rac{\partial L}{\partial z} = rac{a-y}{a(1-a)} \cdot a(1-a) = a - y$
+结论为极其简洁的 $a - y$（即网络输出值与真实标签的差值，也就是误差项）。
+```python
+# 该性质使得逻辑回归/神经网络反向传播计算极其高效。
+```\n

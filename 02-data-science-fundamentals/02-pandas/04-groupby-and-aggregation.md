@@ -92,8 +92,57 @@ GroupBy 三步流程（Split-Apply-Combine）:
     .sort_values("avg_accuracy", ascending=False)
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 按模型和数据集分组，统计准确率均值和标准差。
+### 例题 1：按组统计员工多维度指标 / Groupby and Multi-aggregation
 
-**练习 2：** 实现一个模型评估报告：按模型分组展示所有指标的均值和排名。
+本例模拟 SQL 的 GROUP BY 聚合查询，统计各部门员工的人数、平均薪资以及最高月薪。
+
+```python
+import pandas as pd
+
+# 创建部门薪资表 / Create employee data
+# Time: O(R * C), Space: O(R * C)
+data = {
+    'name': ['E1', 'E2', 'E3', 'E4', 'E5', 'E6'],
+    'dept': ['IT', 'HR', 'IT', 'Sales', 'HR', 'IT'],
+    'salary': [8000, 6000, 9000, 7500, 6500, 12000]
+}
+df = pd.DataFrame(data)
+
+# 进行分组多指标汇总 / Perform groupby multi-aggregation
+# Time: O(R), Space: O(G * C) - G 为分组个数 / G is the number of groups.
+summary = df.groupby('dept')['salary'].agg(
+    count='count',
+    avg_salary='mean',
+    max_salary='max'
+).reset_index()
+
+print("部门汇总分析报表 / Department Summary Report:")
+print(summary)
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：求每个班级的平均成绩，并输出为 Series 格式。
+*参考答案*：
+```python
+# Time: O(N), Space: O(G)
+# df.groupby('class')['score'].mean()
+```
+
+### 进阶题
+**练习 2**：给定一个用户流水账单，包含用户ID、交易日期和交易金额。找出每个用户累计交易总额，并计算每个用户单笔交易最大值，同时筛选出累计交易总额超过 1000 元的用户。
+*参考答案*：
+```python
+import pandas as pd
+df = pd.DataFrame({
+    'user_id': [1, 1, 2, 2, 3],
+    'amount': [600, 500, 1500, 100, 300]
+})
+# Time: O(N), Space: O(G)
+grouped = df.groupby('user_id')['amount'].agg(total='sum', max_val='max')
+filtered_users = grouped[grouped['total'] > 1000]
+print(filtered_users)
+```\n

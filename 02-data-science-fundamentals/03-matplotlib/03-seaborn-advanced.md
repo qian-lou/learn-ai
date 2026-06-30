@@ -93,10 +93,69 @@ ML 常用可视化:
   注意力可视化: 热力图 (Matplotlib/Seaborn)
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 绘制分类模型的混淆矩阵热力图。
+### 例题 1：绘制神经网络输入特征相关性热力图 / Visualizing Feature Correlation Heatmap
 
-**练习 2：** 用小提琴图对比 3 个模型在 5 个数据集上的性能分布。
+在训练多变量回归模型前，相关性分析可以过滤多重共线特征。本例使用 Seaborn 可视化这一关联矩阵。
 
-**练习 3：** 绘制 Attention Weight 热力图（假设 attention 矩阵为 `[seq_len, seq_len]`）。
+```python
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# 构造模拟特征数据集 / Construct feature dataframe
+np.random.seed(42)
+# Time: O(R * C), Space: O(R * C)
+data = pd.DataFrame(np.random.randn(100, 4), columns=['feat_1', 'feat_2', 'feat_3', 'target'])
+data['feat_1'] = data['target'] * 0.8 + np.random.randn(100) * 0.5  # 使得 feat_1 与 target 强相关
+
+# 计算相关系数矩阵 / Compute correlation matrix
+# Time: O(C^2 * R), Space: O(C^2)
+corr = data.corr()
+
+# 绘制热力图 / Plot heatmap
+plt.figure(figsize=(6, 5))
+sns.heatmap(corr, annot=True, cmap='coolwarm', fmt=".2f", vmin=-1, vmax=1)
+plt.title('Feature Correlation Heatmap')
+plt.show()
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：使用 Seaborn 绘制关于鸢尾花（Iris）数据集中两个维度特征的分类散点图。
+*参考答案*：
+```python
+import seaborn as sns
+import matplotlib.pyplot as plt
+iris = sns.load_dataset('iris')
+# Time: O(N), Space: O(N)
+sns.scatterplot(data=iris, x='sepal_length', y='sepal_width', hue='species')
+plt.show()
+```
+
+### 进阶题
+**练习 2**：在模型泛化性对比分析中，已知多个评估指标（Accuracy, F1-Score, ROC-AUC）在不同基座模型（LLaMA, GPT-3.5, BERT）上的分布。使用 Seaborn 的 Boxplot（箱线图）在同一张图中并排展示它们的对比分布。
+*参考答案*：
+```python
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# 构造长格式数据 / Construct long-format data
+data = pd.DataFrame({
+    'Model': np.repeat(['BERT', 'GPT-3.5', 'LLaMA'], 50),
+    'Accuracy': np.concatenate([
+        np.random.normal(0.80, 0.02, 50),
+        np.random.normal(0.88, 0.015, 50),
+        np.random.normal(0.92, 0.01, 50)
+    ])
+})
+# Time: O(N), Space: O(N)
+sns.boxplot(data=data, x='Model', y='Accuracy')
+plt.title('Accuracy Distribution across Models')
+plt.show()
+```\n

@@ -83,8 +83,58 @@ LLM 训练数据清洗要点:
   4. 格式统一（统一换行符/编码）
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 清洗一个含缺失值、重复值、异常值的数据集。
+### 例题 1：数据清洗与异常值百分位裁剪 / Data cleaning and outlier trimming using percentiles
 
-**练习 2：** 实现一个数据质量报告函数，输出每列的缺失率、唯一值数、类型。
+在将特征送入机器学习模型前，清洗空值、重复值并剪裁异常偏离值是非常关键的工程步骤。
+
+```python
+import pandas as pd
+import numpy as np
+
+# 构造脏数据 / Construct raw dirty data
+data = {
+    'user': ['Alice', 'Bob', 'Alice', 'Charlie', 'David'],
+    'income': [5000.0, np.nan, 5000.0, 100000.0, 2000.0]  # Charlie 包含异常高收入
+}
+df = pd.DataFrame(data)
+
+# 1. 过滤重复行 / Remove duplicate rows
+# Time: O(N), Space: O(N)
+df = df.drop_duplicates()
+
+# 2. 填充缺失的收入（以中位数填充） / Fill missing income with median
+# Time: O(N), Space: O(1)
+df['income'] = df['income'].fillna(df['income'].median())
+
+# 3. 使用盖帽法限制过大值（如取 95 分位数裁剪） / Clip extreme values at 95th percentile
+# Time: O(N), Space: O(1)
+p95 = df['income'].quantile(0.95)
+df['income'] = df['income'].clip(upper=p95)
+
+print("清洗并裁剪后的数据集 / Cleaned dataset:")
+print(df)
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：删除含有缺失值的整行数据。
+*参考答案*：
+```python
+# Time: O(N), Space: O(N)
+# df_cleaned = df.dropna()
+```
+
+### 进阶题
+**练习 2**：假设有一个商品价格 DataFrame，有些商品价格是空值，你想根据它们所属的“品类”的平均价格分别填充这些商品的缺失价格。
+*参考答案*：
+```python
+import pandas as pd
+import numpy as np
+df = pd.DataFrame({'category': ['A', 'A', 'B', 'B'], 'price': [10.0, np.nan, np.nan, 20.0]})
+# Time: O(N), Space: O(N)
+df['price'] = df.groupby('category')['price'].transform(lambda x: x.fillna(x.mean()))
+print(df)
+```\n

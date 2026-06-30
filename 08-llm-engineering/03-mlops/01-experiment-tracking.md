@@ -93,10 +93,55 @@ with mlflow.start_run(run_name="lora-r16"):
   4. 团队共享实验结果面板
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用 W&B 跟踪一次 LoRA 微调，对比 r=4, 8, 16 的效果。
+### 例题 1：使用 MLflow 追踪模型超参数与训练 Loss 曲线 / Tracking parameters and metrics with MLflow
 
-**练习 2：** 用 W&B Sweep 自动搜索最佳学习率。
+大模型微调需要频繁尝试不同的学习率和批大小。本例演示如何使用 MLflow 自动化记录这些实验数据。
 
-**练习 3：** 搭建本地 MLflow 服务，记录和对比多次实验。
+```python
+import mlflow
+import numpy as np
+
+# 1. 设置实验名称 / Set MLflow experiment name
+mlflow.set_experiment("LoRA-Finetune-Experiments")
+
+# 2. 模拟训练与日志追踪 / Start run and log parameters
+# Time: O(Steps), Space: O(1)
+with mlflow.start_run(run_name="run_lr_2e-5_r_8"):
+    # 记录超参数 / Log hyperparameters
+    mlflow.log_param("learning_rate", 2e-5)
+    mlflow.log_param("lora_rank", 8)
+    mlflow.log_param("model_name", "llama-3-8b")
+    
+    # 模拟 10 个 Epoch 损失下降 / Simulate training steps
+    for epoch in range(1, 11):
+        loss = 2.5 / (epoch ** 0.5) + np.random.randn() * 0.05
+        # 记录每个步骤的损失 / Log training metrics
+        mlflow.log_metric("loss", loss, step=epoch)
+        print(f"Epoch {epoch}: Loss = {loss:.4f}")
+        
+    # 保存模型元数据标签 / Set tags
+    mlflow.set_tag("framework", "peft")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：在模型实验管理中，什么是超参数（Hyperparameter）和评估指标（Metric）？MLflow 中记录两者的 API 有什么本质区别？
+*参考答案*：
+- **超参数（Hyperparameter）**：在训练开始前设定的参数（如学习率、网络层数、Batch Size），在训练过程中通常是不变的值。MLflow 使用 `mlflow.log_param()` 记录。
+- **评估指标（Metric）**：在训练过程中或训练结束后随步骤变化的观测指标（如 Loss、Accuracy、BLEU 分数）。MLflow 使用 `mlflow.log_metric()` 记录，且支持传入 `step` 参数来绘制时序变化曲线。
+
+### 进阶题
+**练习 2**：在分布式多节点训练中，如何设置 MLflow 的远程追踪服务端（Tracking Server），以便让各个计算卡节点都能将日志指标统一打入集中的 PostgreSQL 数据库中？
+*参考答案*：
+需要在启动 MLflow 远程服务时指定后端数据库连接 URI 以及文件存储路径：
+```bash
+# mlflow server --backend-store-uri postgresql://user:pwd@db-host:5432/mlflow --default-artifact-root s3://my-mlflow-bucket/ --host 0.0.0.0 --port 5000
+```
+然后在 Python 代码中配置环境变量，使 SDK 指向该服务：
+```python
+import os
+os.environ["MLFLOW_TRACKING_URI"] = "http://db-host:5000"
+```\n

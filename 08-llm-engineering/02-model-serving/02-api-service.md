@@ -106,10 +106,70 @@ if __name__ == "__main__":
   ✅ 负载均衡              → Nginx / Traefik
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 构建 OpenAI 兼容的 API，支持流式输出。
+### 例题 1：基于 FastAPI 实现与 OpenAI 兼容的流式响应接口 / OpenAI-compatible Streaming API
 
-**练习 2：** 添加 API Key 认证和限流中间件。
+大模型生成耗时较长，因此“打字机式”的流式输出（Streaming）是生产环境必不可少的。以下展示如何用 FastAPI 搭建此类高并发接口。
 
-**练习 3：** 用 wrk/locust 做压力测试，分析 QPS 和 P99 延迟。
+```python
+import asyncio
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import AsyncGenerator
+
+app = FastAPI()
+
+class ChatRequest(BaseModel):
+    prompt: str
+    temperature: float = 0.7
+
+async def generate_mock_stream(prompt: str) -> AsyncGenerator[str, None]:
+    """模拟大模型逐字生成回复的异步生成器 / Mock LLM generation.
+    
+    Time: O(T * N) - T 为生成 token 数 / T is token count.
+    Space: O(1)
+    """
+    reply = f"已收到提示词: '{prompt}'。以下是我的逐步回答：开发高并发 API 必须使用异步库..."
+    for char in reply:
+        yield f"data: {char}\n\n"  # 遵守 SSE (Server-Sent Events) 格式约定 / SSE format.
+        await asyncio.sleep(0.05)   # 模拟生成等待 / Simulate delay.
+    yield "data: [DONE]\n\n"
+
+@app.post("/v1/chat/completions")
+async def chat_completions(request: ChatRequest):
+    return StreamingResponse(
+        generate_mock_stream(request.prompt),
+        media_type="text/event-stream"
+    )
+
+# 启动命令 / Start with: uvicorn api_service:app --reload
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：在 FastAPI 接口开发中，`def` 函数与 `async def` 异步函数在使用场景上有什么本质区别？
+*参考答案*：
+- `async def`：适用于内部调用了异步阻塞 I/O 操作（例如用 `httpx` 调用第三方大模型 API，或者使用异步数据库库），FastAPI 会在主事件循环中调度，非常节约线程资源。
+- `def`：适用于纯 CPU 密集运算或只有同步阻塞 I/O 的方法，FastAPI 会将其抛入内部自带的专属线程池中执行，防止阻塞主事件循环。
+
+### 进阶题
+**练习 2**：在生产环境的流式大模型 API 中，请为上面的 FastAPI 服务设计并编写一个中间件，用来统计首包延迟（TTFT - Time to First Token）以及整体推理生成吞吐量（Tokens per Second），并将数据记录到日志中。
+*参考答案*：
+```python
+import time
+from fastapi import Request
+
+# 中间件逻辑伪代码实现
+async def log_llm_metrics_middleware(request: Request, call_next):
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    
+    # 模拟在 SSE 流中挂钩子拦截首个 token 弹出的时间
+    # TTFT = time_first_token_sent - start_time
+    # total_duration = time.perf_counter() - start_time
+    # log(f"TTFT: {TTFT}s, Throughput: {total_tokens / total_duration} tokens/s")
+    return response
+```\n

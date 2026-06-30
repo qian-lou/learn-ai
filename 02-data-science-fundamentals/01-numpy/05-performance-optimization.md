@@ -122,10 +122,77 @@ Python 思维模式（错误）:
   3. 纯 Python 循环          → 最慢（100-1000x）
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 不使用循环，计算 1000 个样本与 100 个聚类中心的距离矩阵 `[1000, 100]`。
+### 例题 1：使用矢量化计算高维空间中的两两距离 / Pairwise distance calculation in high-dimensional space
 
-**练习 2：** 用向量化实现 Softmax 函数。
+本例对比传统的 for 循环方式与 NumPy 的矢量化（矩阵操作）方式，计算一批样本之间的欧氏距离，显示矢量化所带来的巨大性能优势。
 
-**练习 3：** 对比 `np.sum(a)` vs `sum(a.tolist())` 在 1 亿元素上的速度差异。
+```python
+import numpy as np
+import time
+
+# 模拟 1000 个 128 维的特征向量 / Simulate 1000 128-d vectors
+X = np.random.randn(1000, 128)  # Shape: [1000, 128]
+
+# 1. 传统 for 循环计算 / Loop-based computation
+# Time: O(N^2 * D), Space: O(N^2)
+start = time.perf_counter()
+dist_loop = np.zeros((1000, 1000))
+for i in range(1000):
+    for j in range(1000):
+        dist_loop[i, j] = np.sqrt(np.sum((X[i] - X[j]) ** 2))
+loop_time = time.perf_counter() - start
+
+# 2. 矢量化计算 (利用公式 (A-B)^2 = A^2 + B^2 - 2AB) / Vectorized computation
+# Time: O(N^2 * D) - 用 C 语言级 BLAS 加速 / Accelerated via BLAS.
+# Space: O(N^2)
+start = time.perf_counter()
+X_sq = np.sum(X ** 2, axis=1, keepdims=True)  # Shape: [1000, 1]
+dist_vec = np.sqrt(np.maximum(X_sq + X_sq.T - 2 * np.dot(X, X.T), 0.0))
+vec_time = time.perf_counter() - start
+
+print(f"循环耗时 / Loop time: {loop_time:.4f}s")
+print(f"矢量化耗时 / Vectorized time: {vec_time:.4f}s")
+print(f"加速比 / Speedup: {loop_time / vec_time:.1f}x")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：使用 np.where 函数实现：对于数组中的每个元素，如果大于 0 保持不变，否则乘以 0.1（类似 LeakyReLU 激活函数）。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(N), Space: O(N)
+x = np.array([-2.0, -0.5, 1.0, 3.0])
+y = np.where(x > 0, x, x * 0.1)
+print(y)  # [-0.2, -0.05, 1.0, 3.0]
+```
+
+### 进阶题
+**练习 2**：编写一个矢量化的梯度裁剪（Gradient Clipping）函数。输入一个包含梯度的 ndarray 列表（每个 ndarray 代表一个权重参数的梯度），计算它们的全局二范数，并在二范数超过给定的最大值 `max_norm` 时进行按比例缩放。
+*参考答案*：
+```python
+import numpy as np
+from typing import List
+
+def clip_grad_norm(grads: List[np.ndarray], max_norm: float) -> None:
+    """矢量化梯度裁剪 / Vectorized gradient clipping.
+    
+    Time: O(Total_Params), Space: O(1)
+    """
+    # 计算全局平方和
+    total_norm = np.sqrt(sum(np.sum(g ** 2) for g in grads))
+    clip_coef = max_norm / (total_norm + 1e-6)
+    
+    # 原地修改梯度
+    if clip_coef < 1.0:
+        for g in grads:
+            g *= clip_coef
+
+# 测试
+g = [np.array([10.0, 5.0]), np.array([2.0, 1.0])]
+clip_grad_norm(g, max_norm=5.0)
+print(f"裁剪后梯度: {g}")
+```\n

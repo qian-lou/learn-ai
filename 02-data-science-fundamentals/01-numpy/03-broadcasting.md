@@ -86,10 +86,60 @@ keepdims=True 的作用:
   mean(axis=1, keepdims=True): Shape [100, 1] → 可以广播！
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用广播计算距离矩阵：`points: [N, 2]` 的所有点对欧氏距离。
+### 例题 1：三维图像的通道归一化 / Channel-wise normalization of 3D images
 
-**练习 2：** 用广播实现 Softmax：`exp(x - max) / sum(exp(x - max))`。
+在计算机视觉中，我们常需要将彩色图像（Height x Width x Channels）的三个通道分别减去均值。以下例题演示如何利用广播机制一次性完成三个通道的减均值运算。
 
-**练习 3：** 判断以下广播是否合法：`[3,1,5] + [1,4,5]`，`[2,3] + [3]`，`[4] + [5]`。
+```python
+import numpy as np
+
+# 模拟 224x224 分辨率的 RGB 图像 / Simulate a 224x224 RGB image
+# Shape: [224, 224, 3]
+image = np.random.rand(224, 224, 3) * 255
+
+# 定义通道均值向量 / Define channel-wise mean
+# Shape: [3]
+channel_means = np.array([123.68, 116.779, 103.939])
+
+# 利用广播机制对图像进行归一化 / Apply channel-wise subtraction using broadcasting
+# channel_means 形状自动扩展为 [1, 1, 3] 以匹配 image [224, 224, 3]
+# Time: O(H * W * C), Space: O(H * W * C)
+normalized_image = image - channel_means
+
+print(f"原始图像形状 / Original image shape: {image.shape}")
+print(f"归一化图像形状 / Normalized image shape: {normalized_image.shape}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：将一维数组 `[1, 2, 3]` 广播加到形状为 `(3, 3)` 的全一矩阵上，使其分别作用在矩阵的每一行上。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(N^2), Space: O(N^2)
+matrix = np.ones((3, 3))
+bias = np.array([[1], [2], [3]])  # Shape: [3, 1] 使得它沿列广播到行
+result = matrix + bias
+print(result)
+```
+
+### 进阶题
+**练习 2**：在模型评估中，我们有一个形状为 `(N, D)` 的样本矩阵 `X`，以及形状为 `(K, D)` 的聚类中心矩阵 `C`。编写代码利用广播机制计算所有样本到所有聚类中心的欧氏距离平方矩阵 `D`（形状为 `(N, K)`），禁止使用任何 Python 循环。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(N * K * D), Space: O(N * K * D)
+N, K, D = 100, 5, 128
+X = np.random.randn(N, D)  # Shape: [N, D]
+C = np.random.randn(K, D)  # Shape: [K, D]
+
+# 扩展维度进行广播 / Expand dimensions for broadcasting
+# X -> Shape: [N, 1, D]
+# C -> Shape: [1, K, D]
+diff = X[:, np.newaxis, :] - C[np.newaxis, :, :]  # Shape: [N, K, D]
+dist_squared = np.sum(diff ** 2, axis=-1)  # Shape: [N, K]
+print(f"距离矩阵形状: {dist_squared.shape}")
+```\n

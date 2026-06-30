@@ -65,8 +65,58 @@ Logistic:     y = σ(Wx + b)
 每一层都是 "线性变换 + 非线性激活"
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用梯度下降实现线性回归（不用 sklearn）。
+### 例题 1：使用 Scikit-Learn 训练一元线性回归模型并评估 / Simple Linear Regression with Sklearn
 
-**练习 2：** 添加 L2 正则化（Ridge Regression），观察过拟合变化。
+通过该例题熟悉使用 Sklearn 模型库进行训练、计算决定系数 $R^2$ 及特征权重。
+
+```python
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_squared_error
+
+# 1. 构造特征和目标 / Construct features and target
+# Time: O(N), Space: O(N)
+np.random.seed(42)
+X = np.random.rand(100, 1) * 10  # 100 个样本 / 100 samples
+y = 2.5 * X + 1.2 + np.random.randn(100, 1) * 2  # 真值权重 2.5，偏置 1.2
+
+# 2. 拟合模型 / Fit model
+# Time: O(N * D^2 + D^3) -> 极快 / Extremely fast.
+# Space: O(N * D)
+model = LinearRegression()
+model.fit(X, y)
+
+# 3. 评估模型 / Evaluate model
+preds = model.predict(X)
+r2 = r2_score(y, preds)
+mse = mean_squared_error(y, preds)
+
+print(f"估计权重 / Coeff W: {model.coef_[0][0]:.4f}")
+print(f"估计偏置 / Intercept b: {model.intercept_[0]:.4f}")
+print(f"决定系数 / R^2 Score: {r2:.4f}")
+print(f"均方误差 / MSE: {mse:.4f}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：解释线性回归模型中的决定系数 $R^2$ 的物理意义。当 $R^2 = 1.0$ 和 $R^2 = 0.0$ 分别代表什么？
+*参考答案*：
+$R^2$ 代表响应变量的变异中，能被自变量的回归方程所解释的比例。
+- $R^2 = 1.0$：模型完美拟合数据，无任何残差。
+- $R^2 = 0.0$：模型的预测效果等同于直接取目标变量的均值。
+
+### 进阶题
+**练习 2**：当特征数量 $D$ 远大于样本量 $N$ 时，线性回归会出现严重的过拟合问题。此时应使用何种正则化（惩罚项）方法解决？请使用 Sklearn 编写带有 L1 正则项（Lasso）和 L2 正则项（Ridge）的回归代码。
+*参考答案*：
+应该使用 Lasso (L1) 获得稀疏解，或 Ridge (L2) 压制权重大小，或 ElasticNet (双结合)。
+```python
+from sklearn.linear_model import Lasso, Ridge
+# Time: O(N * D), Space: O(N * D)
+# Lasso 实例
+lasso = Lasso(alpha=0.1)
+# Ridge 实例
+ridge = Ridge(alpha=1.0)
+```\n

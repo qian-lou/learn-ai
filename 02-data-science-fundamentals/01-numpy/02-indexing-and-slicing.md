@@ -99,10 +99,51 @@ safe_copy = a[0:2].copy()  # 强制创建副本
   副本消耗额外内存 → 大数据时注意内存
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用布尔索引将矩阵中所有负数替换为 0。
+### 例题 1：提取特征图的局部窗口与掩码过滤 / Extract feature map local window and mask filtering
 
-**练习 2：** 提取矩阵主对角线和副对角线元素（不用循环）。
+本例模拟提取卷积特征图中特定感兴趣区域 (ROI)，并将其中所有负数截断为 0 (类似 ReLU 激活)。
 
-**练习 3：** 实现 Attention Mask：给定序列长度列表 `[3, 5, 4]`，生成 `(3, 5)` 的 padding mask。
+```python
+import numpy as np
+
+# 模拟 8x8 特征图 / Simulate an 8x8 feature map
+feature_map = np.random.randn(8, 8)  # Shape: [8, 8]
+
+# 1. 提取中心 4x4 局部窗口 / Extract central 4x4 window
+# Time: O(1) - 视图切片不进行数据拷贝 / View slicing is zero-copy.
+# Space: O(1)
+roi = feature_map[2:6, 2:6]  # Shape: [4, 4]
+
+# 2. 对 ROI 进行 ReLU 处理 (布尔索引过滤并修改) / Apply ReLU to ROI
+# Time: O(W_roi * H_roi), Space: O(1)
+roi[roi < 0] = 0.0
+
+print("处理后的特征图局部窗口 / Processed ROI:")
+print(roi)
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：给定一维数组，提取所有奇数索引处的元素。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(1) view slice
+arr = np.array([10, 20, 30, 40, 50])
+odd_idx_elements = arr[1::2]  # [20, 40]
+```
+
+### 进阶题
+**练习 2**：从一个二维矩阵中，筛选出所有行均值大于 0 的完整行，并组成新的矩阵。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(R * C), Space: O(R_selected * C)
+matrix = np.random.randn(5, 4)
+row_means = matrix.mean(axis=1)  # Shape: [5]
+filtered_matrix = matrix[row_means > 0]  # 布尔索引筛选行
+print(f"筛选后的矩阵形状: {filtered_matrix.shape}")
+```\n

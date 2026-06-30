@@ -116,10 +116,52 @@ Python list vs ndarray:
   ndarray: [数据, 数据, 数据, ...]    → 内存连续
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 用 NumPy 计算两个 1000 维向量的余弦相似度（不用循环）。
+### 例题 1：从零构建模型权重矩阵并计算 L2 正则项 / Build a model weight matrix from scratch and calculate L2 regularization
 
-**练习 2：** 创建一个 1000×768 的随机矩阵（模拟 BERT embeddings），统计其均值、标准差。
+本例演示如何使用 NumPy 创建一个全零的偏置向量、一个随机初始化的权重矩阵，并计算其 L2 范数（正则化项）。
 
-**练习 3：** 对比 `np.float32` 和 `np.float64` 在 1 亿元素上的内存占用和计算速度。
+```python
+import numpy as np
+
+# 1. 初始化模型参数 / Initialize model parameters
+# Time: O(D_in * D_out), Space: O(D_in * D_out)
+d_in, d_out = 128, 64
+weights = np.random.randn(d_in, d_out) * 0.01   # Shape: [128, 64]
+biases = np.zeros((d_out,))                      # Shape: [64]
+
+# 2. 计算权重的 L2 正则项 (平方和除以 2) / Calculate L2 regularization term
+# Time: O(D_in * D_out), Space: O(1)
+l2_reg = 0.5 * np.sum(np.square(weights))
+
+print(f"权重形状 / Weights shape: {weights.shape}")
+print(f"偏置形状 / Biases shape: {biases.shape}")
+print(f"L2 正则值 / L2 Reg value: {l2_reg:.6f}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：创建一个 5x5 的单位矩阵，并将其对角线元素修改为 10。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(N^2), Space: O(N^2)
+matrix = np.eye(5)
+matrix[np.diag_indices(5)] = 10
+print(matrix)
+```
+
+### 进阶题
+**练习 2**：假设有一个一维数组表示的输入层特征 `x`（长度 128）以及权重矩阵 `W`（128x64），编写代码手动计算前向传播输出 $z = xW + b$，要求参数符合 NumPy 高效的底层加速特性（禁止使用 for 循环）。
+*参考答案*：
+```python
+import numpy as np
+# Time: O(D_in * D_out), Space: O(D_out)
+x = np.random.randn(128)  # Shape: [128]
+W = np.random.randn(128, 64)  # Shape: [128, 64]
+b = np.zeros(64)  # Shape: [64]
+z = np.dot(x, W) + b  # Shape: [64]
+print(f"输出形状: {z.shape}")
+```\n

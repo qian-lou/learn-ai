@@ -74,8 +74,60 @@ Merge 类型速查:
   或使用 join 按索引合并（避免 hash）
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 合并模型信息表和评估结果表，生成完整的评估报告。
+### 例题 1：表合并连接（找出没有下单的用户） / Join Operations to find inactive users
 
-**练习 2：** 将多个 CSV 文件纵向拼接为一个 DataFrame。
+在电商场景中，我们需要将用户表与订单表进行外连接，找出哪些注册用户尚未生成任何订单。
+
+```python
+import pandas as pd
+
+# 1. 创建用户表和订单表 / Create users and orders tables
+# Time: O(N), Space: O(N)
+users = pd.DataFrame({
+    'user_id': [1001, 1002, 1003],
+    'username': ['Alice', 'Bob', 'Charlie']
+})
+
+orders = pd.DataFrame({
+    'order_id': ['O_01', 'O_02'],
+    'user_id': [1001, 1002],
+    'amount': [150.0, 320.0]
+})
+
+# 2. 进行左连接 / Perform left join
+# Time: O(N + M), Space: O(N + M)
+merged = pd.merge(users, orders, on='user_id', how='left')
+
+# 3. 筛选订单字段为空的用户 / Filter users without orders
+inactive = merged[merged['order_id'].isna()]
+
+print("未下单用户 / Users with no orders:")
+print(inactive[['user_id', 'username']])
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：将两个结构相同的 DataFrame 纵向拼接（垂直堆叠）在一起。
+*参考答案*：
+```python
+# Time: O(N + M), Space: O(N + M)
+# combined_df = pd.concat([df1, df2], axis=0).reset_index(drop=True)
+```
+
+### 进阶题
+**练习 2**：在特征工程中，你有多个文件分别存储了用户的“年龄段特征”、“消费等级特征”和“标签特征”，主键都是 `user_id`。编写代码将这三个表高效合并为一个宽表，并处理部分主键缺失的情况。
+*参考答案*：
+```python
+import pandas as pd
+t1 = pd.DataFrame({'user_id': [1, 2], 'age': [20, 25]})
+t2 = pd.DataFrame({'user_id': [2, 3], 'spending': ['H', 'M']})
+t3 = pd.DataFrame({'user_id': [1, 3], 'tag': ['A', 'B']})
+
+# 使用 reduce 或 链式 merge 进行 Outer 合并 / Chain merge
+res = pd.merge(t1, t2, on='user_id', how='outer')
+wide_table = pd.merge(res, t3, on='user_id', how='outer')
+print(wide_table)
+```\n

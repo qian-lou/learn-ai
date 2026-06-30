@@ -77,8 +77,56 @@ print(f"CV F1: {scores.mean():.4f} ± {scores.std():.4f}")
   → 增加数据 / 正则化 / 减小模型
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 在不平衡数据集上，对比 Accuracy 和 F1 的差异。
+### 例题 1：计算不平衡分类下的查准率 (Precision)、查全率 (Recall) 与 F1 值 / Precision-Recall calculation
 
-**练习 2：** 画 ROC 曲线和 Precision-Recall 曲线。
+在信贷风控等样本极不均衡的场景，高准确率（Accuracy）极具欺骗性。本例计算真正能表征大模型性能的关键指标。
+
+```python
+import numpy as np
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
+
+# 真实标签与预测标签 / True labels and predictions
+# 1 为有风险（正类，极少数），0 为无风险（负类）
+y_true = np.array([0, 0, 0, 0, 0, 0, 0, 0, 1, 1])
+y_pred = np.array([0, 0, 0, 0, 0, 0, 0, 1, 0, 1])  # 漏判了 1 个，误判了 1 个
+
+# 1. 计算混淆矩阵 / Compute confusion matrix
+# Time: O(N), Space: O(1)
+cm = confusion_matrix(y_true, y_pred)
+
+# 2. 计算各项核心评估指标 / Compute metrics
+precision = precision_score(y_true, y_pred)
+recall = recall_score(y_true, y_pred)
+f1 = f1_score(y_true, y_pred)
+
+print(f"混淆矩阵 / Confusion Matrix:\n{cm}")
+print(f"查准率 / Precision: {precision:.4f}")
+print(f"查全率 / Recall: {recall:.4f}")
+print(f"F1 调和均值 / F1-Score: {f1:.4f}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：解释为什么在极度倾斜的数据集上，F1-Score 比 Accuracy 更适合作为模型评估的终极指标？
+*参考答案*：
+如果数据集中 99% 的样本为负类，若模型全部盲猜负类，Accuracy 依然能达到 99%（看似完美，实则对正类毫无识别能力）。F1-Score 同时考虑了精确率与召回率的调和均值，若对少数类的召回率很低或精确率很低，F1-Score 都会迅速降低，能够更客观地反映模型在关键类别上的性能。
+
+### 进阶题
+**练习 2**：编写代码，使用 `cross_val_score` 对线性模型在波士顿房价数据集（或生成数据集）上进行 5 折交叉验证，输出每一折的 RMSE 并计算平均均方根误差。
+*参考答案*：
+```python
+from sklearn.datasets import make_regression
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score
+import numpy as np
+# Time: O(5 * Train_Time), Space: O(N * D)
+X, y = make_regression(n_samples=200, n_features=5, noise=0.1, random_state=42)
+reg = LinearRegression()
+scores = cross_val_score(reg, X, y, cv=5, scoring='neg_mean_squared_error')
+rmse_scores = np.sqrt(-scores)
+print(f"5折 RMSE 分数: {rmse_scores}")
+print(f"平均 RMSE: {np.mean(rmse_scores):.4f}")
+```\n

@@ -89,8 +89,70 @@ Matplotlib 两种 API 风格:
 推荐: 简单图用 pyplot，多子图用 OOP
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 绘制模型训练的损失和准确率双 Y 轴曲线。
+### 例题 1：可视化神经网络训练损失曲线 / Visualizing neural network training loss curve
 
-**练习 2：** 绘制模型权重分布的直方图，标注均值和标准差。
+本例展示如何利用 Matplotlib 绘制经典的训练 Loss 与评估 Loss 随 Epoch 变化的对比折线图。
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+# 构造模拟训练数据 / Construct mock data
+epochs = np.arange(1, 21)
+# Time: O(N), Space: O(N)
+train_loss = 2.0 / (epochs ** 0.5) + np.random.randn(20) * 0.05
+val_loss = 2.0 / (epochs ** 0.5) + 0.1 + np.random.randn(20) * 0.05
+
+# 绘制折线图 / Plot lines
+plt.figure(figsize=(8, 5))
+plt.plot(epochs, train_loss, label='Train Loss', color='blue', marker='o')
+plt.plot(epochs, val_loss, label='Val Loss', color='red', linestyle='--')
+
+# 添加元信息 / Add metadata labels
+plt.title('Training and Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.grid(True)
+plt.legend()
+plt.show()
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：绘制包含 5 个分类的柱状图（Bar Chart），并在每个柱子上方标注具体的数值。
+*参考答案*：
+```python
+import matplotlib.pyplot as plt
+categories = ['A', 'B', 'C', 'D', 'E']
+values = [5, 7, 3, 8, 4]
+# Time: O(N), Space: O(N)
+bars = plt.bar(categories, values)
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width()/2, yval + 0.1, yval, ha='center', va='bottom')
+plt.show()
+```
+
+### 进阶题
+**练习 2**：在模型误差分析中，已知预测值的残差 $e_i = y_i - \hat{y}_i$，我们需要分析残差的分布。绘制一个包含残差直方图（Histogram）以及拟合正态分布密度曲线的复合图。
+*参考答案*：
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import norm
+
+# 模拟残差
+residuals = np.random.normal(loc=0, scale=1.5, size=1000)
+
+# 绘制直方图和正态分布密度线 / Plot hist and density line
+plt.hist(residuals, bins=30, density=True, alpha=0.6, color='g')
+xmin, xmax = plt.xlim()
+x = np.linspace(xmin, xmax, 100)
+p = norm.pdf(x, 0, 1.5)
+plt.plot(x, p, 'k', linewidth=2)
+plt.title('Residuals Distribution')
+plt.show()
+```\n

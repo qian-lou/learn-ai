@@ -65,8 +65,67 @@ print(f"CV Mean: {scores.mean():.4f} ± {scores.std():.4f}")
   - 不容易过拟合（相比单棵树）
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 对比决策树和随机森林在 Iris 数据集上的准确率。
+### 例题 1：手动计算基尼系数（Gini Impurity）与节点切分 / Manual calculation of Gini Impurity
 
-**练习 2：** 用 XGBoost 做表格数据分类，与随机森林对比。
+决策树在寻找分割点时使用基尼系数衡量节点纯度。本例计算样本分裂前后的基尼系数增益。
+
+```python
+import numpy as np
+
+# 样本类别标签 / Label list
+# 10 个样本，5 个正类(1)，5 个负类(0)
+labels = np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
+
+def calc_gini(y: np.ndarray) -> float:
+    """计算基尼系数 / Compute Gini Impurity.
+    
+    Time: O(N), Space: O(U) - U 为类别个数 / U is the number of classes.
+    """
+    if len(y) == 0:
+        return 0.0
+    _, counts = np.unique(y, return_counts=True)
+    probs = counts / len(y)
+    return float(1.0 - np.sum(probs ** 2))
+
+# 分裂前的基尼系数 / Gini before split
+gini_init = calc_gini(labels)
+
+# 假设某个特征分裂：左子树 4 个正 1 个负；右子树 1 个正 4 个负
+# Split left and right nodes
+left_node = np.array([1, 1, 1, 1, 0])
+right_node = np.array([1, 0, 0, 0, 0])
+
+# 加权计算分裂后的基尼系数 / Weighted Gini after split
+gini_split = (len(left_node) / len(labels)) * calc_gini(left_node) + \
+             (len(right_node) / len(labels)) * calc_gini(right_node)
+
+print(f"初始基尼系数 / Initial Gini: {gini_init:.4f}")
+print(f"分裂后基尼系数 / Split Gini: {gini_split:.4f}")
+print(f"基尼系数增益 / Gini Gain: {gini_init - gini_split:.4f}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：解释随机森林中“Bagging”与“特征随机选择”这两个核心机制对降低过拟合的作用。
+*参考答案*：
+- **Bagging（自助采样）**：每次随机有放回地抽取部分样本进行训练，增加了树之间的差异性，降低方差。
+- **特征随机选择**：每次切分节点时，只随机选择特征子集，避免某些强特征霸占所有的分裂，使各决策树更为互补和独立。
+
+### 进阶题
+**练习 2**：使用 Sklearn 的决策树分类器对手写数字数据集进行分类，利用网格搜索（GridSearchCV）优化最大树深度 `max_depth` 与最小叶子节点样本数 `min_samples_leaf`，并输出最佳参数组合。
+*参考答案*：
+```python
+from sklearn.datasets import load_digits
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import GridSearchCV
+# Time: O(Grid_Size * cv * Train_Time), Space: O(N * D)
+digits = load_digits()
+clf = DecisionTreeClassifier()
+param_grid = {'max_depth': [3, 5, 10, None], 'min_samples_leaf': [1, 2, 5]}
+grid = GridSearchCV(clf, param_grid, cv=5)
+grid.fit(digits.data, digits.target)
+print(f"最佳超参数组合: {grid.best_params_}")
+```\n

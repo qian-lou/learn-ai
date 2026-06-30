@@ -56,8 +56,72 @@ total = sum(x**2 for x in range(10_000_000))  # 不创建列表
 - 生成器只能遍历一次（与 Java Stream 类似）
 - `yield from` 用于委托子生成器（扁平化嵌套生成器）
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 实现一个无限斐波那契数列生成器。
+### 例题 1：使用生成器实现一个高效的数据批处理加载器 / Implement an efficient data batch loader using generator
 
-**练习 2：** 用生成器实现一个数据批处理函数 `batched(iterable, size)`。
+在大模型训练中，由于内存限制，我们需要分批次读取海量数据集。以下例题实现了一个类似 PyTorch DataLoader 的批处理生成器。
+
+```python
+from typing import Generator, Iterable, List, TypeVar
+
+T = TypeVar('T')
+
+def batched(iterable: Iterable[T], batch_size: int) -> Generator[List[T], None, None]:
+    """将可迭代对象切分为固定大小的批次输出 / Yield batches of elements from an iterable.
+    
+    Time: O(N) - 遍历所有元素一次 / Iterate all elements once.
+    Space: O(B) - B 为 batch_size，保存当前批次的缓冲区 / Buffer of batch size.
+    """
+    batch: List[T] = []
+    for item in iterable:
+        batch.append(item)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []  # 清空缓冲区 / Clear buffer
+    if batch:
+        yield batch  # 产出最后一批 / Yield remaining elements
+
+# 测试 / Test
+dataset = range(10)
+for i, batch in enumerate(batched(dataset, batch_size=3)):
+    print(f"Batch {i}: {batch}")
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：实现一个无限生成斐波那契数列的生成器。
+*参考答案*：
+```python
+from typing import Generator
+
+def fibonacci() -> Generator[int, None, None]:
+    """Time: O(1) per step, Space: O(1)"""
+    a, b = 0, 1
+    while True:
+        yield a
+        a, b = b, a + b
+```
+
+### 进阶题
+**练习 2**：实现一个支持管道处理的生成器，第一阶段生成平方数，第二阶段过滤其中的奇数，最后求和。
+*参考答案*：
+```python
+from typing import Iterable, Generator
+
+def make_squares(nums: Iterable[int]) -> Generator[int, None, None]:
+    for n in nums:
+        yield n * n
+
+def filter_odds(nums: Iterable[int]) -> Generator[int, None, None]:
+    for n in nums:
+        if n % 2 == 0:
+            yield n
+
+# 管道连接 / Pipeline chaining
+nums = range(10)
+squares = make_squares(nums)
+evens = filter_odds(squares)
+print(f"平方数中的偶数之和: {sum(evens)}")  # 120
+```\n

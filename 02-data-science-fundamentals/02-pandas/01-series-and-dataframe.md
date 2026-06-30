@@ -85,8 +85,62 @@ Pandas vs SQL:
   → 字符串列转 category 类型可节省 90% 内存
 ```
 
-## 5-6. 例题/习题
+## 5. 例题（Worked Examples）
 
-**练习 1：** 创建一个包含 1000 个样本的 DataFrame，计算各列的统计信息。
+### 例题 1：从字典创建 DataFrame 并执行多条件过滤与列添加 / Creating DataFrame and multi-condition filtering
 
-**练习 2：** 用条件过滤和排序模拟 SQL 查询：`SELECT * FROM df WHERE score > 80 ORDER BY age DESC LIMIT 10`。
+在特征工程中，我们常用 Pandas 整理多维特征。本例展示创建 DataFrame，添加新特征并筛选特定子集。
+
+```python
+import pandas as pd
+import numpy as np
+
+# 1. 创建学生信息 DataFrame / Create student DataFrame
+# Time: O(R * C), Space: O(R * C)
+data = {
+    'name': ['Alice', 'Bob', 'Charlie', 'David'],
+    'score': [85, 92, 58, 76],
+    'class': ['A', 'B', 'A', 'B']
+}
+df = pd.DataFrame(data)
+
+# 2. 新增是否合格列 / Add pass/fail column
+# Time: O(R), Space: O(R)
+df['passed'] = df['score'] >= 60
+
+# 3. 过滤出班级为 A 且成绩合格的学生 / Filter class A and passed students
+# Time: O(R), Space: O(R_filtered * C)
+filtered_df = df[(df['class'] == 'A') & (df['passed'] == True)]
+
+print("过滤后的学生列表 / Filtered Students:")
+print(filtered_df)
+```
+
+## 6. 习题（Exercises）
+
+### 基础题
+**练习 1**：创建一个包含五行数据的 DataFrame，每一行代表一个员工的姓名、部门和月薪，并计算全体员工的月薪平均值。
+*参考答案*：
+```python
+import pandas as pd
+df = pd.DataFrame({
+    'name': ['E1', 'E2', 'E3', 'E4', 'E5'],
+    'dept': ['IT', 'HR', 'IT', 'Sales', 'HR'],
+    'salary': [8000, 6000, 9000, 7500, 6500]
+})
+# Time: O(N), Space: O(1)
+print(f"平均月薪: {df['salary'].mean()}")
+```
+
+### 进阶题
+**练习 2**：给定一个学生成绩 DataFrame，新增一列表示“成绩评级”：分数 >= 90 为 'A'，>= 80 为 'B'，>= 60 为 'C'，否则为 'D'。要求使用 pandas 的内置向量化方法（如 `pd.cut` 或 `apply`），避免使用 for 循环。
+*参考答案*：
+```python
+import pandas as pd
+# Time: O(N), Space: O(N)
+df = pd.DataFrame({'name': ['Alice', 'Bob', 'Charlie', 'David'], 'score': [85, 92, 58, 76]})
+bins = [0, 60, 80, 90, 100]
+labels = ['D', 'C', 'B', 'A']
+df['grade'] = pd.cut(df['score'], bins=bins, labels=labels, right=False)
+print(df)
+```\n

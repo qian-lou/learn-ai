@@ -151,4 +151,4 @@ def to_dict(req: ServingRequest) -> Dict[str, Any]:
 def from_dict(data: Dict[str, Any]) -> ServingRequest:
     """Time: O(N) properties, Space: O(N)"""
     return ServingRequest(**data)
-```\n
+```

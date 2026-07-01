@@ -135,4 +135,4 @@ class TextDataset(Dataset):
     def __getitem__(self, idx: int) -> torch.Tensor:
         # 加载第 idx 个样本，转换为张量返回
         return torch.tensor([ord(c) for c in self.texts[idx]])
-```\n
+```

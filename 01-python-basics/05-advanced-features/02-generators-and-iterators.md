@@ -124,4 +124,4 @@ nums = range(10)
 squares = make_squares(nums)
 evens = filter_odds(squares)
 print(f"平方数中的偶数之和: {sum(evens)}")  # 120
-```\n
+```

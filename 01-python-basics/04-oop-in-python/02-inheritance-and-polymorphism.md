@@ -167,4 +167,4 @@ class DbRepository(Repository):
 *参考答案*：
 这是一个典型的菱形继承。
 - 继承结构：D 继承 B 和 C，B 和 C 分别继承 A。
-- `D.__mro__` 的顺序为：`(__main__.D, __main__.B, __main__.C, __main__.A, object)`。这确保了父类 A 的方法只会被调用一次。\n
+- `D.__mro__` 的顺序为：`(__main__.D, __main__.B, __main__.C, __main__.A, object)`。这确保了父类 A 的方法只会被调用一次。

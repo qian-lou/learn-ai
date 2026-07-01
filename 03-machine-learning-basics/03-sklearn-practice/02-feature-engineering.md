@@ -126,4 +126,4 @@ import numpy as np
 y_transformed = np.log1p(y)
 # 推理还原 / Inverse transform
 y_original = np.expm1(y_transformed)
-```\n
+```

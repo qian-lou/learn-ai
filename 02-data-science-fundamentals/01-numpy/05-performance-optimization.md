@@ -195,4 +195,4 @@ def clip_grad_norm(grads: List[np.ndarray], max_norm: float) -> None:
 g = [np.array([10.0, 5.0]), np.array([2.0, 1.0])]
 clip_grad_norm(g, max_norm=5.0)
 print(f"裁剪后梯度: {g}")
-```\n
+```

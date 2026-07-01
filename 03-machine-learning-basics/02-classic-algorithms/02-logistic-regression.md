@@ -125,4 +125,4 @@ def binary_cross_entropy(y_true: np.ndarray, y_pred_prob: np.ndarray) -> float:
 y_true = np.array([1, 0, 1, 0])
 y_prob = np.array([0.95, 0.05, 0.99, 0.01])
 print(f"交叉熵损失: {binary_cross_entropy(y_true, y_prob):.6f}")
-```\n
+```

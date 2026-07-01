@@ -192,4 +192,4 @@ jobs:
 *参考答案*：
 可以通过以下两种方式分离：
 1. **触发条件分离**：日常提交只触发 Lint 和轻量 CPU 单元测试。只有当向 GitHub 仓库打上特定 Tag（如 `v*.*-train`）或手动选择 `workflow_dispatch` 时才触发微调流水线。
-2. **执行节点托管**：通过配置 Self-hosted Runner，将重型微调任务分发至内网自建的 GPU 服务器节点上，而不是运行在 GitHub 提供的免费 CPU 虚拟机上。\n
+2. **执行节点托管**：通过配置 Self-hosted Runner，将重型微调任务分发至内网自建的 GPU 服务器节点上，而不是运行在 GitHub 提供的免费 CPU 虚拟机上。

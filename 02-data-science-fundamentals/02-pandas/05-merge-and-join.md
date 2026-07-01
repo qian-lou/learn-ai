@@ -130,4 +130,4 @@ t3 = pd.DataFrame({'user_id': [1, 3], 'tag': ['A', 'B']})
 res = pd.merge(t1, t2, on='user_id', how='outer')
 wide_table = pd.merge(res, t3, on='user_id', how='outer')
 print(wide_table)
-```\n
+```

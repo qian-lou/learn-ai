@@ -143,4 +143,4 @@ bins = [0, 60, 80, 90, 100]
 labels = ['D', 'C', 'B', 'A']
 df['grade'] = pd.cut(df['score'], bins=bins, labels=labels, right=False)
 print(df)
-```\n
+```

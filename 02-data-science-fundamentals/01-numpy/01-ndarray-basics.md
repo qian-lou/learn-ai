@@ -164,4 +164,4 @@ W = np.random.randn(128, 64)  # Shape: [128, 64]
 b = np.zeros(64)  # Shape: [64]
 z = np.dot(x, W) + b  # Shape: [64]
 print(f"输出形状: {z.shape}")
-```\n
+```

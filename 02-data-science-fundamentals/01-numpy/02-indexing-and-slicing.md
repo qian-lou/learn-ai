@@ -146,4 +146,4 @@ matrix = np.random.randn(5, 4)
 row_means = matrix.mean(axis=1)  # Shape: [5]
 filtered_matrix = matrix[row_means > 0]  # 布尔索引筛选行
 print(f"筛选后的矩阵形状: {filtered_matrix.shape}")
-```\n
+```

@@ -137,4 +137,4 @@ df = pd.DataFrame({'category': ['A', 'A', 'B', 'B'], 'price': [10.0, np.nan, np.
 # Time: O(N), Space: O(N)
 df['price'] = df.groupby('category')['price'].transform(lambda x: x.fillna(x.mean()))
 print(df)
-```\n
+```

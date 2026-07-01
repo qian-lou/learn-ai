@@ -161,4 +161,4 @@ $rac{\partial L}{\partial z} = rac{\partial L}{\partial a} \cdot rac{\partial
 结论为极其简洁的 $a - y$（即网络输出值与真实标签的差值，也就是误差项）。
 ```python
 # 该性质使得逻辑回归/神经网络反向传播计算极其高效。
-```\n
+```

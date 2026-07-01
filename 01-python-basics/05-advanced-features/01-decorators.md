@@ -173,4 +173,4 @@ def retry(max_retries: int = 3) -> Callable[..., Any]:
                     time.sleep(0.1)
         return wrapper
     return decorator
-```\n
+```

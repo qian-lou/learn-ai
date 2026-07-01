@@ -172,4 +172,4 @@ async def log_llm_metrics_middleware(request: Request, call_next):
     # total_duration = time.perf_counter() - start_time
     # log(f"TTFT: {TTFT}s, Throughput: {total_tokens / total_duration} tokens/s")
     return response
-```\n
+```

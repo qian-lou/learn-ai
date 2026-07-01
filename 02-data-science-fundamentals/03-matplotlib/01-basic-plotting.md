@@ -155,4 +155,4 @@ p = norm.pdf(x, 0, 1.5)
 plt.plot(x, p, 'k', linewidth=2)
 plt.title('Residuals Distribution')
 plt.show()
-```\n
+```

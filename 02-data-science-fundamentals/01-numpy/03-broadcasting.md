@@ -142,4 +142,4 @@ C = np.random.randn(K, D)  # Shape: [K, D]
 diff = X[:, np.newaxis, :] - C[np.newaxis, :, :]  # Shape: [N, K, D]
 dist_squared = np.sum(diff ** 2, axis=-1)  # Shape: [N, K]
 print(f"距离矩阵形状: {dist_squared.shape}")
-```\n
+```

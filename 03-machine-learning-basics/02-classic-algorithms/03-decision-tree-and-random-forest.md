@@ -128,4 +128,4 @@ param_grid = {'max_depth': [3, 5, 10, None], 'min_samples_leaf': [1, 2, 5]}
 grid = GridSearchCV(clf, param_grid, cv=5)
 grid.fit(digits.data, digits.target)
 print(f"最佳超参数组合: {grid.best_params_}")
-```\n
+```

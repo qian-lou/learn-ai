@@ -166,4 +166,4 @@ sorted_eigenvalues = eigenvalues[idx]
 sorted_eigenvectors = eigenvectors[:, idx]
 
 print(f"最大特征值: {sorted_eigenvalues[0]:.4f}")
-```\n
+```

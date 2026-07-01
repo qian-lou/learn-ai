@@ -129,4 +129,4 @@ scores = cross_val_score(reg, X, y, cv=5, scoring='neg_mean_squared_error')
 rmse_scores = np.sqrt(-scores)
 print(f"5折 RMSE 分数: {rmse_scores}")
 print(f"平均 RMSE: {np.mean(rmse_scores):.4f}")
-```\n
+```

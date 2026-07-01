@@ -280,4 +280,4 @@ plt.show()
 应使用 `class_weight='balanced'` 参数，或者手动指定各类别的权重字典，使少数类的误分类惩罚权重成比例放大。
 ```python
 # SVC(kernel='rbf', class_weight='balanced')
-```\n
+```

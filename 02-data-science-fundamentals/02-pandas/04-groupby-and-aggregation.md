@@ -145,4 +145,4 @@ df = pd.DataFrame({
 grouped = df.groupby('user_id')['amount'].agg(total='sum', max_val='max')
 filtered_users = grouped[grouped['total'] > 1000]
 print(filtered_users)
-```\n
+```

@@ -119,4 +119,4 @@ from sklearn.linear_model import Lasso, Ridge
 lasso = Lasso(alpha=0.1)
 # Ridge 实例
 ridge = Ridge(alpha=1.0)
-```\n
+```

@@ -173,4 +173,4 @@ print(f"T=0.5 (确定性倾向): {softmax(logits, 0.5)}")
 print(f"T=1.0 (常规采样):   {softmax(logits, 1.0)}")
 print(f"T=2.0 (随机性倾向): {softmax(logits, 2.0)}")
 # 结论：T 越小概率越向最大值集聚，T 趋近于 0 变为 one-hot；T 越大概率分布越平缓，趋近于均匀分布。
-```\n
+```

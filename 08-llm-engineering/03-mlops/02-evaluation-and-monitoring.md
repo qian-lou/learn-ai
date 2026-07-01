@@ -233,4 +233,4 @@ print(f"RAG  Faithfulness (忠实度评分): {score:.2f}")  # 得分 0.75
 # from prometheus_client import Histogram
 # ttft_histogram = Histogram('llm_ttft_seconds', 'Time to first token in seconds')
 # ttft_histogram.observe(time_first_token - start_time)
-```\n
+```

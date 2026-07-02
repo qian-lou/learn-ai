@@ -73,7 +73,7 @@ openai_data = {
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 from peft import LoraConfig, get_peft_model
-from trl import SFTTrainer, SFTConfig
+from trl import SFTTrainer, SFTConfig, DataCollatorForCompletionOnlyLM
 from datasets import load_dataset
 
 # ============================================================
@@ -114,16 +114,23 @@ training_args = SFTConfig(
     gradient_accumulation_steps=4,
     learning_rate=2e-4,
     warmup_ratio=0.1,
-    max_seq_length=2048,
+    max_length=2048,   # TRL 0.20+ 用 max_length（旧版为 max_seq_length）
     logging_steps=10,
     save_steps=200,
     bf16=True,
+)
+
+# 只对 Response 计算 loss：用 collator 匹配 response_template，
+# 把模板之前（instruction）的 labels 自动置为 -100，与 4.1 节机制一致
+collator = DataCollatorForCompletionOnlyLM(
+    response_template="### Response:\n", tokenizer=tokenizer
 )
 
 trainer = SFTTrainer(
     model=model,
     args=training_args,
     train_dataset=dataset,
+    data_collator=collator,      # 关键：不加则对全序列（含 instruction）计算 loss
     processing_class=tokenizer,  # TRL 0.12+ 用 processing_class 取代 tokenizer
 )
 trainer.train()
@@ -222,8 +229,8 @@ ds = ds.map(lambda e: {"text":
 
 trainer = SFTTrainer(
     model=model, train_dataset=ds,
-    args=SFTConfig(output_dir="./gpt2_sft", num_train_epochs=3, max_seq_length=512),
-    processing_class=tok)  # TRL 0.12+ 用 processing_class / use processing_class
+    args=SFTConfig(output_dir="./gpt2_sft", num_train_epochs=3, max_length=512),
+    processing_class=tok)  # TRL 0.12+ 用 processing_class；max_length 为 TRL 0.20+ 参数名
 trainer.train()
 ```
 
@@ -266,12 +273,16 @@ from datasets import load_dataset
 from trl import SFTTrainer, SFTConfig
 
 full = load_dataset("json", data_files="sft_data.jsonl", split="train")
+# 先切出固定验证集，保证不同 size 在同一验证集上可比 / hold out a shared eval set
+split = full.train_test_split(test_size=0.1, seed=42)
+train_full, eval_ds = split["train"], split["test"]
+
 for size in (100, 1000, 10000):
-    subset = full.select(range(min(size, len(full))))  # 截取子集 / take subset
+    subset = train_full.select(range(min(size, len(train_full))))  # 截取训练子集 / take subset
     trainer = SFTTrainer(
-        model=model, train_dataset=subset,
+        model=model, train_dataset=subset, eval_dataset=eval_ds,
         args=SFTConfig(output_dir=f"./sft_{size}", num_train_epochs=3,
-                       max_seq_length=512),
+                       max_length=512, eval_strategy="epoch"),  # 开启评估才有 eval_loss
         processing_class=tok)
     trainer.train()
     print(f"[n={size}] eval_loss =", trainer.evaluate().get("eval_loss"))

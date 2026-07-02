@@ -134,7 +134,7 @@ class SequencePredictor(nn.Module):
         self.rnn = nn.RNN(input_dim, hidden_dim, num_layers=1, batch_first=True)
         self.fc = nn.Linear(hidden_dim, output_dim)
         
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # x Shape: [B, S, I]
         # output Shape: [B, S, H] - 包含每个时间步隐状态的集合
         # h_n Shape: [1, B, H] - 仅包含最后一个时间步的隐状态

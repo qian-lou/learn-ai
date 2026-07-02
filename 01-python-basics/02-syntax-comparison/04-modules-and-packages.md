@@ -88,8 +88,8 @@ from my_project.utils.helpers import format_name
 
 # 相对导入：从当前模块所在包算起。'.' = 当前包，'..' = 上一级包
 # Relative import: '.' = current package, '..' = parent package
-from .models.user import User        # 同级 services 看不到 models？不——根都是 my_project
-from ..utils.helpers import format_name   # 上跳一级再进 utils
+from ..models.user import User       # 先上跳一级到 my_project，再进入 models
+from ..utils.helpers import format_name   # 同理：上跳一级再进 utils
 
 # Google Python Style Guide 明确推荐"绝对导入"，仅在包内部强耦合时用相对导入
 # 类比 Java：Java 只有全限定名（绝对），没有相对导入这个概念
@@ -441,6 +441,7 @@ class UserDAO:                       # 数据层 / DAO layer
 
 # service.py —— Service 调用 DAO，不跨层 / Service -> DAO, no layer skipping
 from .dao import UserDAO
+from .model import User              # 注解用到 User 需显式导入（依赖 model 层 DO 不算跨层）
 class UserService:
     def __init__(self) -> None:
         self._dao = UserDAO()

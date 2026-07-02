@@ -56,7 +56,7 @@ y = 3 * X + 2 + np.random.randn(100, 1) * 0.5
 w, b = 0.0, 0.0
 lr = 0.01
 
-for epoch in range(100):
+for epoch in range(1000):
     pred = w * X + b
     loss = np.mean((pred - y) ** 2)  # MSE
     dw = np.mean(2 * X * (pred - y))  # ∂L/∂w
@@ -64,7 +64,7 @@ for epoch in range(100):
     w -= lr * dw
     b -= lr * db
 
-print(f"w={w:.2f}, b={b:.2f}")  # ≈ w=3.0, b=2.0
+print(f"w={w:.2f}, b={b:.2f}")  # ≈ w=2.93, b=2.00
 ```
 
 ### 3.2 优化器
@@ -151,13 +151,13 @@ print(f"最终收敛点 / Convergence point: {p}")  # 理论极小值在 (1, 1)
 导数 $f'(x) = 2x - 4$。令 $2x - 4 = 0$，解得 $x = 2$。因为二阶导数 $f''(x) = 2 > 0$，所以 $x=2$ 是极小值点，极小值为 0。
 
 ### 进阶题
-**练习 2**：在机器学习反向传播中，已知激活函数为 Sigmoid 且输出为 $a = \sigma(z)$，损失函数为二元交叉熵损失 $L = -[y\ln a + (1-y)\ln(1-a)]$。利用链式法则，推导损失函数对网络输入 $z$ 的偏导数 $rac{\partial L}{\partial z}$，并给出最终化简表达式。
+**练习 2**：在机器学习反向传播中，已知激活函数为 Sigmoid 且输出为 $a = \sigma(z)$，损失函数为二元交叉熵损失 $L = -[y\ln a + (1-y)\ln(1-a)]$。利用链式法则，推导损失函数对网络输入 $z$ 的偏导数 $\frac{\partial L}{\partial z}$，并给出最终化简表达式。
 *参考答案*：
 根据链式法则：
-$rac{\partial L}{\partial z} = rac{\partial L}{\partial a} \cdot rac{\partial a}{\partial z}$
-1. 计算第一项：$rac{\partial L}{\partial a} = -rac{y}{a} + rac{1-y}{1-a} = rac{a-y}{a(1-a)}$
-2. 计算第二项：Sigmoid 的导数为 $rac{\partial a}{\partial z} = a(1-a)$
-3. 相乘化简得：$rac{\partial L}{\partial z} = rac{a-y}{a(1-a)} \cdot a(1-a) = a - y$
+$\frac{\partial L}{\partial z} = \frac{\partial L}{\partial a} \cdot \frac{\partial a}{\partial z}$
+1. 计算第一项：$\frac{\partial L}{\partial a} = -\frac{y}{a} + \frac{1-y}{1-a} = \frac{a-y}{a(1-a)}$
+2. 计算第二项：Sigmoid 的导数为 $\frac{\partial a}{\partial z} = a(1-a)$
+3. 相乘化简得：$\frac{\partial L}{\partial z} = \frac{a-y}{a(1-a)} \cdot a(1-a) = a - y$
 结论为极其简洁的 $a - y$（即网络输出值与真实标签的差值，也就是误差项）。
 ```python
 # 该性质使得逻辑回归/神经网络反向传播计算极其高效。

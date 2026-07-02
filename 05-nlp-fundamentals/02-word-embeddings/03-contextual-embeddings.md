@@ -282,9 +282,11 @@ print(engine.search("study python coding", top_k=2))
 import torch
 from transformers import AutoModel, AutoTokenizer
 
+tok = AutoTokenizer.from_pretrained("bert-base-cased")
 model = AutoModel.from_pretrained("bert-base-cased",
                                   output_hidden_states=True).eval()
 
+enc = tok("Barack Obama visited Paris", return_tensors="pt")
 with torch.no_grad():
     out = model(**enc)
 # hidden_states: 长度 13 的元组，每个 [B, T, 768]

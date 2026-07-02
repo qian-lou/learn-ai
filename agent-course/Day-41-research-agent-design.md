@@ -87,7 +87,8 @@ class ResearchState(TypedDict, total=False):
     # 用 operator.add 让多轮/并行 research 的来源自动累加，而非互相覆盖
     # operator.add merges sources across parallel/looped research instead of overwriting
     sources: Annotated[list[Source], operator.add]
-    findings: list[Finding]                         # analyze 产出 / from analyze
+    # findings 同样用 operator.add：多轮 gap 循环里每轮发现需累加而非覆盖，否则报告只剩最后一轮
+    findings: Annotated[list[Finding], operator.add]  # analyze 产出，多轮累加 / from analyze, merged
     is_sufficient: bool                             # analyze 判定是否充分 / enough?
     round: int                                      # 当前研究轮次 / loop counter
     max_rounds: int                                 # 循环上限（健壮性）/ loop cap
@@ -95,7 +96,7 @@ class ResearchState(TypedDict, total=False):
     human_approved: bool                            # HITL 结果（Day 44 用）/ HITL gate
 ```
 
-> 设计注解：`sources` 用 `Annotated[..., operator.add]` 是 LangGraph 的 **reducer** 机制——并行/多轮节点对同一字段的写入会被"归并"而非"覆盖"。这正是 Day 33"多 agent 共享状态不互相踩"的标准解法，今天先埋好。
+> 设计注解：`sources` 和 `findings` 都用 `Annotated[..., operator.add]` 是 LangGraph 的 **reducer** 机制——并行/多轮节点对同一字段的写入会被"归并"而非"覆盖"。研究 Agent 有 gap 循环，每轮都会新增来源与发现，若不加 reducer，第二轮的写入会把第一轮覆盖掉，最终报告只剩最后一轮。这正是 Day 33"多 agent 共享状态不互相踩"的标准解法，今天先埋好。
 
 ## 3. 今日任务
 

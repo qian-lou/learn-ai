@@ -105,8 +105,8 @@ print(f"ROC-AUC 指标 / ROC-AUC Score: {roc_auc_score(y, probs):.4f}")
 ### 基础题
 **练习 1**：写出逻辑回归模型使用的 Sigmoid 函数数学公式，并说明为什么它能将数值映射到 `(0, 1)` 区间。
 *参考答案*：
-$\sigma(z) = rac{1}{1 + e^{-z}}$
-当 $z 	o \infty$ 时，$e^{-z} 	o 0$，$\sigma(z) 	o 1$；当 $z 	o -\infty$ 时，$e^{-z} 	o \infty$，$\sigma(z) 	o 0$。因此输出天然限制在 `(0, 1)` 区间，适合表示概率。
+$\sigma(z) = \frac{1}{1 + e^{-z}}$
+当 $z \to \infty$ 时，$e^{-z} \to 0$，$\sigma(z) \to 1$；当 $z \to -\infty$ 时，$e^{-z} \to \infty$，$\sigma(z) \to 0$。因此输出天然限制在 `(0, 1)` 区间，适合表示概率。
 
 ### 进阶题
 **练习 2**：从零编写 Python 函数，实现逻辑回归中的交叉熵损失函数（Binary Cross Entropy Loss）计算，并且要考虑边界情况（概率接近 0 或 1 时 `log` 的数值溢出问题）。

@@ -100,7 +100,9 @@ def refund_order(order_id: str, amount: float, idempotency_key: str) -> Dict[str
     except httpx.HTTPStatusError as exc:
         # 把 Java 4xx 业务错误转成 LLM 可读观察、不抛栈 / map errors to observations, no crash
         code = exc.response.status_code
-        detail = exc.response.json().get("detail", "未知错误")
+        # 兼容两种默认错误体：开了 ProblemDetail 取 detail，默认 DefaultErrorAttributes 取 message
+        body = exc.response.json()
+        detail = body.get("detail") or body.get("message") or "未知错误"
         return {"ok": False, "http_status": code, "reason": detail}
     except httpx.TimeoutException:
         return {"ok": False, "reason": "Java 服务超时,请稍后重试 / upstream timeout"}

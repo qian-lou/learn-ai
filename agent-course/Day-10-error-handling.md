@@ -52,15 +52,20 @@ def get_order(order_id: str) -> dict[str, Any]:
     return {"order_id": order_id, "status": "已发货", "eta_days": 2}
 
 
-def safe_execute(name: str, impl, args: dict[str, Any]) -> dict[str, Any]:
+def safe_execute(name: str, impl_map: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     """统一执行工具：永不抛栈，失败转成结构化错误回填给模型。
 
     Args:
-        name: 工具名 / tool name. impl: 工具实现 / the callable. args: 参数 / kwargs.
+        name: 工具名 / tool name. impl_map: 工具名→实现的注册表 / tool registry. args: 参数 / kwargs.
 
     Returns:
         成功为结果 dict，失败为 {"error", "hint"} / result or error.
     """
+    # 工具名查找也纳入防线：模型可能幻觉出未注册的工具名 / guard against hallucinated names
+    impl = impl_map.get(name)
+    if impl is None:
+        return {"ok": False, "error": f"未知工具：{name}", "retryable": False,
+                "hint": "该工具不存在，请只用已提供的工具 / no such tool, use provided ones only"}
     try:
         return {"ok": True, "data": impl(**args)}
     except ValueError as e:        # 可纠正：参数错 → 提示模型改参数重试
@@ -109,7 +114,7 @@ def run(question: str) -> str:
         messages.append(msg)
         for call in msg.tool_calls:
             args = json.loads(call.function.arguments)
-            result = safe_execute(call.function.name, IMPL[call.function.name], args)
+            result = safe_execute(call.function.name, IMPL, args)
             if not result["ok"]:
                 error_count += 1
                 print(f"  [错误 {error_count}] {result['error']}")

@@ -66,14 +66,14 @@ async def chat(req: ChatRequest):
 
 async def stream_generate(req: ChatRequest):
     """SSE 流式输出 / Server-Sent Events streaming."""
-    tokens = "这是一个流式输出的示例回复".split()
-    for token in tokens:
+    # 中文无空格，按字符逐个吐出模拟打字机效果 / iterate per char (no spaces in Chinese)
+    for token in "这是一个流式输出的示例回复":
         yield f"data: {token}\n\n"
         await asyncio.sleep(0.05)
     yield "data: [DONE]\n\n"
 
 # ============================================================
-# 中间件：限流 + 日志
+# 中间件：日志（限流见 4.1，可用 slowapi/Redis 实现）
 # ============================================================
 @app.middleware("http")
 async def log_requests(request, call_next):

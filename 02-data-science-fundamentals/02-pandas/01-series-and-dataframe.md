@@ -29,7 +29,8 @@ import numpy as np
 # ============================================================
 s = pd.Series([10, 20, 30], index=["a", "b", "c"], name="scores")
 print(s["a"])     # 10（按标签访问）
-print(s[0])       # 10（按位置访问）
+print(s.iloc[0])  # 10（按位置访问）
+# 注意：pandas 3.x 起 s[整数] 一律按标签解释，位置访问必须用 .iloc
 print(s.mean())   # 20.0
 
 # ============================================================
@@ -139,7 +140,7 @@ print(f"平均月薪: {df['salary'].mean()}")
 import pandas as pd
 # Time: O(N), Space: O(N)
 df = pd.DataFrame({'name': ['Alice', 'Bob', 'Charlie', 'David'], 'score': [85, 92, 58, 76]})
-bins = [0, 60, 80, 90, 100]
+bins = [0, 60, 80, 90, 101]  # right=False 为左闭右开区间，上界取 101 才能让满分 100 落入 [90, 101) 评为 'A'
 labels = ['D', 'C', 'B', 'A']
 df['grade'] = pd.cut(df['score'], bins=bins, labels=labels, right=False)
 print(df)

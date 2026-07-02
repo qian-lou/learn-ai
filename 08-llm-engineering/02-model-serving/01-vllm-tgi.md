@@ -38,9 +38,9 @@ for out in outputs:
 ### 3.2 vLLM 作为 API 服务
 
 ```bash
-# 启动 OpenAI 兼容的 API 服务器
-python -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen2.5-7B-Instruct \
+# 启动 OpenAI 兼容的 API 服务器（2026 推荐 vllm serve 子命令，见 3.5）
+# 旧写法 python -m vllm.entrypoints.openai.api_server 仍可用但已不推荐
+vllm serve Qwen/Qwen2.5-7B-Instruct \
     --host 0.0.0.0 \
     --port 8000 \
     --tensor-parallel-size 1
@@ -65,7 +65,7 @@ docker run --gpus all -p 8080:80 \
     -v $PWD/models:/data \
     ghcr.io/huggingface/text-generation-inference:latest \
     --model-id Qwen/Qwen2.5-7B-Instruct \
-    --max-input-length 4096 \
+    --max-input-tokens 4096 \
     --max-total-tokens 8192
 ```
 
@@ -92,10 +92,12 @@ PagedAttention: 像操作系统的虚拟内存一样管理 KV Cache
 ```bash
 # 现代启动方式：vllm serve 子命令（替代旧的 python -m vllm.entrypoints.openai.api_server）
 # Modern entry point: the `vllm serve` CLI (replaces the old api_server module)
+# --enable-prefix-caching：V1 默认开，命中相同前缀直接复用 KV / on by default in V1
+# --tensor-parallel-size：张量并行卡数，须整除注意力头数 / must divide #attn heads
 vllm serve Qwen/Qwen2.5-7B-Instruct \
     --host 0.0.0.0 --port 8000 \
-    --enable-prefix-caching \          # V1 默认开；命中相同前缀直接复用 KV / on by default in V1
-    --tensor-parallel-size 1 \         # 张量并行卡数；须整除注意力头数 / must divide #attn heads
+    --enable-prefix-caching \
+    --tensor-parallel-size 1 \
     --max-model-len 8192
 ```
 

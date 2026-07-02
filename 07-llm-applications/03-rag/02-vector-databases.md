@@ -242,7 +242,7 @@ def hybrid_search(query, query_vec, doc_vecs, alpha=0.5, k=2):
     # 归一化后加权融合 / min-max normalize then weighted sum
     lex = np.array(bm25.get_scores(query.split()))
     sem = doc_vecs @ query_vec                # 已归一化向量的内积=余弦 / cosine via dot
-    norm = lambda s: (s - s.min()) / (s.ptp() + 1e-9)
+    norm = lambda s: (s - s.min()) / (np.ptp(s) + 1e-9)  # NumPy 2.x 移除 ndarray.ptp，用 np.ptp
     score = alpha * norm(lex) + (1 - alpha) * norm(sem)
     return np.argsort(score)[::-1][:k]        # Top-k 索引 / top-k indices
 ```

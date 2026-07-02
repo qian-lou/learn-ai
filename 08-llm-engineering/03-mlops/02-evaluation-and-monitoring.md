@@ -143,8 +143,8 @@ def judge_pairwise(question: str, ans_a: str, ans_b: str) -> Verdict:
 - **常见 benchmark**：MMLU-Pro、GPQA（研究生级推理）、HumanEval+ / MBPP+（代码）、
   GSM8K / MATH（数学）、IFEval（指令遵循）、Arena-Hard 与 Chatbot Arena Elo（人类偏好）。
 
-**(3) Ragas 真实调用 / Real Ragas usage（替代前文手写 mock）**
-正文例题用的是手写规则；生产中用 `ragas.evaluate(...)` 调强模型自动评检索/生成质量。
+**(3) Ragas 真实调用 / Real Ragas usage（替代下文第 5 节例题的手写 mock）**
+下文第 5 节例题用的是手写规则 mock；生产中应改用 `ragas.evaluate(...)` 调强模型自动评检索/生成质量。
 
 ```python
 # ============================================================
@@ -211,7 +211,8 @@ def estimate_faithfulness(context: str, answer: str) -> float:
     return float(sum(matches) / len(keywords))
 
 context_doc = "为了处理高并发场景，系统设计必须引入异步消息中间件，并且将热数据放入 Redis 缓存数据库中。"
-answer_text = "开发高性能系统应当选用高并发的异步模型，并且集成缓存数据库。"
+# 回答缺少关键词「数据库」，故 4 个关键词只命中 3 个
+answer_text = "开发高性能系统应当选用高并发的异步模型，并结合缓存提速。"
 
 score = estimate_faithfulness(context_doc, answer_text)
 print(f"RAG  Faithfulness (忠实度评分): {score:.2f}")  # 得分 0.75

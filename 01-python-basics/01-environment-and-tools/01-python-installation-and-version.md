@@ -20,7 +20,7 @@
 
 **核心要点：**
 - Python 2 已于 2020 年停止维护，**只学 Python 3**
-- 大模型开发推荐 Python **3.11 或 3.12**（2026 年 PyTorch / vLLM / transformers 均已稳定支持 3.12；3.13 free-threading 也已 stable）/ recommend 3.11/3.12 in 2026
+- 大模型开发推荐 Python **3.11 或 3.12**（2026 年 PyTorch / vLLM / transformers 均已稳定支持 3.12；3.13 引入实验性 free-threading，3.14 起转为官方支持（PEP 779），生态适配仍在推进，求稳选 3.11/3.12）/ recommend 3.11/3.12 in 2026
 - macOS/Linux 自带的 Python **不要动**，用 pyenv 管理独立版本
 
 ## 3. 内容（Content）
@@ -29,7 +29,7 @@
 
 ```
 Python 版本选择决策树：
-                    ┌─ 需要最新特性 / free-threading？ ─→ Python 3.13
+                    ┌─ 需要最新特性 / free-threading？ ─→ Python 3.14
                     │
 你要学大模型 ──────┼─ 需要最佳兼容性？ ─→ Python 3.11 / 3.12 ✅ 推荐
                     │
@@ -39,7 +39,7 @@ Python 版本选择决策树：
 **为什么推荐 3.11/3.12？**
 - 2026 年 PyTorch、vLLM、Hugging Face Transformers 均已稳定支持 3.12，TensorFlow 同样覆盖 / all stable on 3.12 by 2026
 - 3.11 起解释器显著提速（CPython faster-cpython 计划），3.12 进一步优化
-- 3.13 的 free-threading（无 GIL）已转 stable，但生态适配仍在推进，求稳选 3.11/3.12
+- 3.13 引入实验性 free-threading（无 GIL），3.14 起转为官方支持（PEP 779），但生态适配仍在推进，求稳选 3.11/3.12
 - `match-case`（3.10 引入，类似 Java `switch` 增强版）等现代语法在 3.11/3.12 一应俱全
 
 ### 3.2 安装方式对比
@@ -170,7 +170,7 @@ Python 实现对比：
 # 1. 多进程（multiprocessing）—— 每个进程有独立 GIL
 # 2. C 扩展（NumPy/PyTorch）—— 在 C 层面释放 GIL
 # 3. asyncio —— I/O 密集场景用协程
-# 4. Python 3.13+ 引入 free-threaded 模式（实验性）
+# 4. free-threaded 模式：3.13 实验性引入，3.14 起转为官方支持（PEP 779）
 ```
 
 > **对 Java 工程师的启示：** 不用太担心 GIL。在大模型开发中，计算密集部分由 PyTorch（C++ 后端）处理，GIL 不是瓶颈。

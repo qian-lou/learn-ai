@@ -69,7 +69,8 @@ _DATA_DIR = Path("./data").resolve()  # 安全沙箱目录 / sandbox dir, blocks
 def read_file(filename: str) -> str:
     """读取沙箱目录内的文本文件（防路径穿越）/ read a file inside the sandbox."""
     target = (_DATA_DIR / filename).resolve()
-    if not str(target).startswith(str(_DATA_DIR)):  # 确保仍在沙箱内 / still inside?
+    # 注意：裸 str.startswith 前缀匹配是常见漏洞写法，会被同前缀兄弟目录（如 ./data-evil）绕过
+    if not target.is_relative_to(_DATA_DIR):  # 语义化判断仍在沙箱内 / still inside?
         raise ValueError("拒绝越权访问 / path traversal blocked")
     return target.read_text(encoding="utf-8")[:2000]  # 截断防爆上下文 / cap length
 
@@ -140,7 +141,7 @@ if __name__ == "__main__":
 1. 准备 `./data/notes.txt` 随便写两行，跑 4 类问题各一遍，确认每类都路由正确。
 2. **制造路由歧义**：把两个工具的 description 改得很相似，观察模型是否选错——体会"描述互斥性"的作用。
 3. **触发并行**：问"北京和上海分别有谁？"，看 `tool_calls` 是否一次返回两个 `query_users` 调用。
-4. **验证安全**：诱导模型 `read_file("../../etc/passwd")`，确认被路径穿越防护拦下、Agent 优雅报错而非崩溃。
+4. **验证安全**：诱导模型 `read_file("../../etc/passwd")` 和 `read_file("../data-evil/x.txt")`（同前缀兄弟目录，可先在 `data` 旁边建个 `data-evil/` 试验——裸 `startswith` 前缀匹配就会被它绕过），确认两者都被路径穿越防护拦下、Agent 优雅报错而非崩溃。
 
 **验收标准**：4 类问题各自路由正确；能复现一次并行/多步工具调用；越权读文件被拦截且 Agent 不崩；你能解释"为什么模型选对了工具"。
 

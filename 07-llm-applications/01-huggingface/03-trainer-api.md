@@ -71,8 +71,8 @@ training_args = TrainingArguments(
     learning_rate=2e-5,
     weight_decay=0.01,
     warmup_ratio=0.1,
-    eval_strategy="epoch",          # transformers 4.46+ 由 evaluation_strategy 改名；老版本请用 evaluation_strategy
-                                    # renamed from evaluation_strategy in transformers 4.46+; use the old name on older versions
+    eval_strategy="epoch",          # transformers 4.41 起由 evaluation_strategy 改名为 eval_strategy（旧名 4.46 移除）；4.41 以下用 evaluation_strategy
+                                    # renamed from evaluation_strategy in 4.41 (old name removed in 4.46); use evaluation_strategy below 4.41
     save_strategy="epoch",
     load_best_model_at_end=True,
     metric_for_best_model="f1",

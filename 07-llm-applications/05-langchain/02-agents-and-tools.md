@@ -69,7 +69,8 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 agent = create_react_agent(llm, tools)
 
 # ReAct 循环：Thought → Action → Observation → ... → Final Answer
-result = agent.invoke({"messages": [("user", "计算 15+27 然后查北京天气")]})
+# 演示问题仅涉及已定义的 calculator / get_current_time 两个工具
+result = agent.invoke({"messages": [("user", "现在几点？再算一下 15+27")]})
 print(result["messages"][-1].content)
 ```
 
@@ -107,15 +108,15 @@ print(f"调用: {tool_call.function.name}({tool_call.function.arguments})")
 ```
 ReAct Agent 循环：
 
-用户: "计算 15+27 然后查天气"
+用户: "现在几点？再算 15+27"
 
-Thought 1: 先计算
-Action 1: calculator("15+27")  → 42
+Thought 1: 先查时间
+Action 1: get_current_time()  → 2026-07-02 14:30:00
 
-Thought 2: 再查天气
-Action 2: search("北京天气")  → 晴，25°C
+Thought 2: 再计算
+Action 2: calculator("15+27")  → 42
 
-Final Answer: 15+27=42，北京晴25°C。
+Final Answer: 现在是 2026-07-02 14:30，15+27=42。
 ```
 
 ## 4. 详细推理（Deep Dive）
@@ -133,9 +134,9 @@ Final Answer: 15+27=42，北京晴25°C。
 ## 5. 例题（Worked Examples）
 
 ```python
-# 多工具 Agent / Multi-tool agent
-result = agent.invoke({"messages": [("user", "搜索 Python 3.12 新特性并总结")]})
-print(result["messages"][-1].content)  # Agent 自动：选择工具 → 调用 → 总结
+# 多工具 Agent：一条问题触发多次工具调用 / Multi-tool agent
+result = agent.invoke({"messages": [("user", "现在几点？顺便算 (12+8)*3")]})
+print(result["messages"][-1].content)  # Agent 自动：选择工具 → 调用 → 汇总
 ```
 
 ## 6. 习题（Exercises）

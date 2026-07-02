@@ -250,14 +250,17 @@ def ask(q: Q):
 ```python
 import logging
 from fastapi import FastAPI, Request
-from slowapi import Limiter
+from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from langchain_community.callbacks import get_openai_callback
 
 logging.basicConfig(level=logging.INFO)
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limiter
+# 注册限流异常处理，触发限流时返回 429 而非 500 / return 429, not 500, on limit hit
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.post("/chat")
 @limiter.limit("10/minute")        # 每 IP 每分钟 10 次 / 10 req/min per IP

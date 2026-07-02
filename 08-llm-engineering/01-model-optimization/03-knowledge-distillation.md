@@ -31,8 +31,10 @@
   → 保留了类别间的相似度信息
 
 损失函数:
-  L = α × CE(soft_teacher, soft_student) + (1-α) × CE(hard_label, student)
-  
+  L = α × KL(soft_teacher ∥ soft_student) × T² + (1-α) × CE(hard_label, student)
+  软标签项用 KL 或 CE 梯度等价（仅差 Teacher 熵这一常数），但 T² 校正不可省——
+  漏乘 T² 会让软标签梯度量级偏小、几乎不起作用（见 3.2 代码与模块 README）。
+
   Temperature T: 控制软标签的"软度"
   softmax(logits / T)  T=1: 正常  T=5: 更软  T=20: 几乎均匀
 ```
@@ -86,8 +88,8 @@ class DistillationLoss(nn.Module):
   → Vicuna (70K ShareGPT 对话)
 
 效果:
-  LLaMA-7B + Alpaca 数据 ≈ GPT-3.5 的 80% 效果
-  成本: 训练 GPT-3.5 级别模型 < $100
+  LLaMA-7B + Alpaca 数据 → 指令跟随风格明显逼近 GPT-3.5（团队自评，非公认同级）
+  成本: 训练算力 < $100，另加约 $500 造数据 API 费用，合计 < $600
 ```
 
 > **2024-2025 现代蒸馏主线 / Modern distillation (2024-2025)：** 不再局限于 BERT→DistilBERT 的老套路，主流是「强模型（GPT-4 / Claude）→ 小模型」的**数据蒸馏**，并叠加 **on-policy distillation**——让 Student 先生成，再用 Teacher 对 Student 自己的输出打分/纠正（如 MiniLLM 的 reverse-KL、DistillKit / 各家 distillation 工具链），比纯离线静态数据更能贴合 Student 分布、缓解 exposure bias。

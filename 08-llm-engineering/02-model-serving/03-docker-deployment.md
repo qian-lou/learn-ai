@@ -25,8 +25,8 @@
 # ============================================================
 FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
-# 系统依赖
-RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
+# 系统依赖（curl 供下方 HEALTHCHECK 使用）
+RUN apt-get update && apt-get install -y python3 python3-pip curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

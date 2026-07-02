@@ -74,7 +74,7 @@ rag_prompt = PromptTemplate.from_template("""
 参考资料：
 {context}
 
-问题：{question}
+问题：{input}
 
 回答：""")
 
@@ -107,7 +107,7 @@ from langchain.retrievers import BM25Retriever, EnsembleRetriever
 # 2. Re-ranking（重排序）
 # ============================================================
 # from sentence_transformers import CrossEncoder
-# reranker = CrossEncoder("BAAI/bge-reranker-base")
+# reranker = CrossEncoder("BAAI/bge-reranker-v2-m3")  # v2-m3 取代旧 reranker-base
 # 
 # 检索 Top-20 → Re-rank → 取 Top-3
 # scores = reranker.predict([(query, doc) for doc in candidates])
@@ -159,9 +159,10 @@ RAG 评估四个维度 (RAGAS 框架):
 import gradio as gr
 
 def rag_chat(message, history):
-    result = qa_chain.invoke({"query": message})
-    sources = [doc.metadata.get("source", "unknown") for doc in result["source_documents"]]
-    return f"{result['result']}\n\n📎 来源: {', '.join(set(sources))}"
+    # 与 3.1 的 create_retrieval_chain 契约一致：输入键 input，输出 answer/context
+    result = qa_chain.invoke({"input": message})
+    sources = [doc.metadata.get("source", "unknown") for doc in result["context"]]
+    return f"{result['answer']}\n\n📎 来源: {', '.join(set(sources))}"
 
 # demo = gr.ChatInterface(rag_chat, title="文档问答助手")
 # demo.launch()
@@ -233,7 +234,7 @@ hybrid = EnsembleRetriever(
 
 # 2) Cross-Encoder 精排取 Top-3 / rerank to top-3
 reranker = CrossEncoderReranker(
-    model=HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base"), top_n=3)
+    model=HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3"), top_n=3)
 pipeline = ContextualCompressionRetriever(
     base_compressor=reranker, base_retriever=hybrid)
 docs = pipeline.invoke("报销流程是什么？")

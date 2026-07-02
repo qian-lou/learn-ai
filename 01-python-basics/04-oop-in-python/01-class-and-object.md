@@ -141,8 +141,8 @@ query = QueryBuilder().from_table("users").where("age > 18").where("active = 1")
 # Java POJO: class User { private String name; private int age; +getter/setter }
 class User:
     def __init__(self, name: str, age: int) -> None:
-        self.name = name        # 触发下方 setter 校验 / triggers setter validation
-        self.age = age
+        self.name = name        # 普通属性直接赋值，无校验 / plain attribute, no validation
+        self.age = age          # 触发下方 setter 校验 / triggers setter validation
 
     @property
     def age(self) -> int:       # 等价 getAge() / getter

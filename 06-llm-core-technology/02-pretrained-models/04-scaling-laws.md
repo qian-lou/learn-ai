@@ -124,7 +124,7 @@ Scaling Laws 如何指导决策：
    预算固定 → Chinchilla Law 算出最优 N 和 D
    
 2. 训练数据量:
-   LLaMA-1: 7B + 1T tokens (过拟合区间)
+   LLaMA-1: 7B + 1T tokens (超出 Chinchilla 最优、进入过度训练/收益递减区)
    LLaMA-2: 7B + 2T tokens（远超 Chinchilla 最优）
    LLaMA-3: 8B + 15T tokens（极度过训练，但推理更高效）
    

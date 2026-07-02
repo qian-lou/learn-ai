@@ -133,7 +133,7 @@ plt.show()
 ## 6. 习题（Exercises）
 
 ### 基础题
-**练习 1**：使用 `plt.subplots` 创建一个 `1x3` 的子图网络，将当前样本在三个通道上的色彩直方图并排绘制出来。
+**练习 1**：使用 `plt.subplots` 创建一个 `1x3` 的子图网格，将当前样本在三个通道上的色彩直方图并排绘制出来。
 *参考答案*：
 ```python
 import matplotlib.pyplot as plt

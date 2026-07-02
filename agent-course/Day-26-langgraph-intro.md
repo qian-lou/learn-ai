@@ -103,11 +103,11 @@ print(graph.get_graph().draw_ascii())
 ## 3. 今日任务
 
 1. 跑通 `day26_graph.py`，确认三条消息按序输出、`step == 2`。
-2. **验证 reducer 语义**：把 `greet` 的返回从 `{"messages": [reply]}` 改成 `{"messages": reply}`（去掉 list），观察报错；再把 `step` 字段试着返回字符串，体会"默认覆盖"和类型约束。
+2. **验证 reducer 语义（覆盖 vs 追加）**：把 State 里 `messages` 字段上的 `Annotated[..., add_messages]` 注解去掉，改成裸的 `list[AnyMessage]`（退回默认 reducer）。重跑后你会看到最终 `result["messages"]` 只剩最后一个节点返回的那条消息——历史被**整体覆盖**而非追加。对比加了 `add_messages` 时的"三条消息按序累积"，你就摸清了 reducer 的作用。（顺带一提：即使保留 `add_messages`，把返回写成 `{"messages": reply}`（去掉 list）也**不会报错**——`add_messages` 会把单条消息自动包成列表再合并；真正的差别在"有没有 `add_messages`"，不在"有没有外层 list"。）
 3. **加第三个节点** `route_log`：插在 `greet` 和 `finalize` 之间，往 messages 追加一条"已记录"，重新 `draw_ascii()` 确认拓扑变了。
 4. **接真模型**：把 `greet` 里写死的 reply 换成真实 LLM 调用（用 `langchain_openai.ChatOpenAI(model="gpt-4o-mini").invoke(state["messages"])`），让节点真正"思考"。
 
-**验收标准**：能解释"节点返回增量、reducer 负责合并"；改坏 reducer 能看懂报错；新增节点后 `draw_ascii()` 反映出新拓扑；至少一个节点接上了真实模型。
+**验收标准**：能解释"节点返回增量、reducer 负责合并"；去掉 `add_messages` 后能看懂"覆盖 vs 追加"的行为差异；新增节点后 `draw_ascii()` 反映出新拓扑；至少一个节点接上了真实模型。
 
 ## 4. 自测清单
 

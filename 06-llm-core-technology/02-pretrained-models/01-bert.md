@@ -38,7 +38,7 @@ BERT 的两个预训练任务：
      10% → 保持不变
    
    为什么不全用 [MASK]？
-   → 微调时没有 [MASK]，训练和推理不一致（Exposure Bias）
+   → 微调时没有 [MASK]，训练和推理不一致（pretrain-finetune discrepancy，预训练-微调不一致）
 
 2. NSP (Next Sentence Prediction) — 下一句预测:
    输入: "[CLS] 句子A [SEP] 句子B [SEP]"
@@ -113,6 +113,10 @@ class TextDataset(Dataset):
 # 训练循环
 model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
 optimizer = AdamW(model.parameters(), lr=2e-5)  # BERT 微调用小学习率
+
+# 构建 Dataset / DataLoader（texts、labels、tokenizer 沿用 3.2 中的定义）
+train_ds = TextDataset(texts, labels, tokenizer)
+dataloader = DataLoader(train_ds, batch_size=16, shuffle=True)
 
 model.train()
 for epoch in range(3):

@@ -6,7 +6,7 @@
 
 ## 1. 为什么 & 是什么
 
-你的差异化优势是**双栈**。Python 那套（langchain + LCEL）你已经熟了；今天证明**同一套 RAG 思想在 Java 里同样顺滑**，而且企业里大量后端就是 Spring。Spring AI（2024 起 GA）把 RAG 抽象成了非常"Spring 味"的组件：`VectorStore`、`EmbeddingModel`、`Advisor`，依赖注入、自动配置一应俱全。
+你的差异化优势是**双栈**。Python 那套（langchain + LCEL）你已经熟了；今天证明**同一套 RAG 思想在 Java 里同样顺滑**，而且企业里大量后端就是 Spring。Spring AI（2024 年起孵化、2025 年 5 月 1.0 GA）把 RAG 抽象成了非常"Spring 味"的组件：`VectorStore`、`EmbeddingModel`、`Advisor`，依赖注入、自动配置一应俱全。
 
 Python 概念 → Spring AI / LangChain4j 对照：
 
@@ -93,8 +93,12 @@ public class RagQaService {
                 .topK(TOP_K)
                 .similarityThreshold(SIMILARITY_THRESHOLD)
                 .build();
+        // 1.0 GA：带 SearchRequest 的构造器已移除，配置统一走 builder
+        // 1.0 GA: the SearchRequest ctor is gone; configure via the builder
         this.chatClient = builder
-                .defaultAdvisors(new QuestionAnswerAdvisor(vectorStore, searchRequest))
+                .defaultAdvisors(QuestionAnswerAdvisor.builder(vectorStore)
+                        .searchRequest(searchRequest)
+                        .build())
                 .build();
     }
 
@@ -130,8 +134,9 @@ EmbeddingStoreIngestor.ingest(Document.from(text), store);     // 切分+嵌入+
 // 检索器注入 AiServices，检索对调用方透明 / retriever feeds AiServices
 ContentRetriever retriever = EmbeddingStoreContentRetriever.builder()
         .embeddingStore(store).maxResults(TOP_K).minScore(SIMILARITY_THRESHOLD).build();
+// 1.x：ChatLanguageModel 更名为 ChatModel，builder 方法用 chatModel(...)
 Assistant assistant = AiServices.builder(Assistant.class)
-        .chatLanguageModel(model).contentRetriever(retriever).build();
+        .chatModel(model).contentRetriever(retriever).build();
 String answer = assistant.chat("pgvector 是用来做什么的？");
 ```
 

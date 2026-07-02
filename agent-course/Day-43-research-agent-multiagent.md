@@ -29,7 +29,7 @@ plan → research → analyze ──[sufficient or round≥max]──▶ report 
 只改昨天文件里的 `research_node`、`analyze_node`，新增 `refine_node` 与一条**条件边**。检索工具用 DuckDuckGo（免 key，适合学习）。
 
 ```bash
-pip install "duckduckgo-search>=6.0"   # 免 key 搜索 / no-key search for the lesson
+pip install ddgs   # 免 key 搜索；ddgs 是 duckduckgo-search 更名后的现行包 / no-key search
 ```
 
 ```python
@@ -44,7 +44,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS  # duckduckgo-search 已更名为 ddgs，接口 drop-in
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END
 
@@ -129,6 +129,8 @@ def route_after_analyze(state: ResearchState) -> str:
 ```
 
 把这些改动并入昨天的文件，并按注释把 `analyze` 后改成条件边、`refine→research` 连成回环。再跑一次：对一个较宽的问题，你会看到它可能研究 2~3 轮、补检 gap，最后产出覆盖更全的报告。
+
+> 注意 `research_node` 每轮 `return {"sources": all_sources, "findings": all_findings}`，二者靠 Day 41 state 里的 `operator.add` reducer **跨轮累加**——`findings` 也必须带 reducer（Day 41 已同步补上），否则第二轮会覆盖第一轮，最终报告只剩最后一轮的发现，与"覆盖更全"矛盾。
 
 ## 3. 今日任务
 

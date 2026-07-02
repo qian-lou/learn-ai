@@ -216,14 +216,25 @@ B, N, D = 2, 5, 16
 x = torch.randn(B, N, D)  # Shape: [B, N, D]
 Wq, Wk, Wv, Wo = (torch.randn(D, D) for _ in range(4))
 
-# 单头朴素自注意力 / Plain single-head self-attention
+# 分支 A：单头朴素自注意力 / Plain single-head self-attention
 Q, K, V = x @ Wq, x @ Wk, x @ Wv
 attn = F.softmax((Q @ K.transpose(-2, -1)) / math.sqrt(D), dim=-1)
 out_plain = (attn @ V) @ Wo  # Shape: [B, N, D]
 
-# MHA(n_heads=1)：reshape 成 [B, 1, N, D] 后结果完全一致
-# MHA with 1 head reshapes to [B, 1, N, D], giving identical output
-assert torch.allclose(out_plain, out_plain, atol=1e-6)  # 用同权重时两者逐元素相等
+# 分支 B：MHA(n_heads=1)，用同一组权重走多头路径
+# MHA path with a single head, sharing the same weights
+n_heads, d_head = 1, D // 1  # d_head == d_model
+Qh = (x @ Wq).view(B, N, n_heads, d_head).transpose(1, 2)  # Shape: [B, 1, N, D]
+Kh = (x @ Wk).view(B, N, n_heads, d_head).transpose(1, 2)  # Shape: [B, 1, N, D]
+Vh = (x @ Wv).view(B, N, n_heads, d_head).transpose(1, 2)  # Shape: [B, 1, N, D]
+scores = (Qh @ Kh.transpose(-2, -1)) / math.sqrt(d_head)   # Shape: [B, 1, N, N]
+attn_h = F.softmax(scores, dim=-1)
+ctx = (attn_h @ Vh).transpose(1, 2).contiguous().view(B, N, D)  # 合并头 -> [B, N, D]
+out_mha = ctx @ Wo  # Shape: [B, N, D]
+
+# n_heads=1 时头维度为 1，多头路径与单头朴素自注意力逐元素相等
+# With a single head, both branches produce identical outputs
+assert torch.allclose(out_plain, out_mha, atol=1e-6)
 ```
 
 **练习 2：** 为什么 d_model 必须能被 n_heads 整除？

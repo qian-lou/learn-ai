@@ -73,9 +73,9 @@ def load_and_split(dir_path: str) -> list[tuple[str, str, int]]:
     Returns:
         列表 [(content, source, chunk_no)] / list of (text, source, index).
     """
-    # 加载 .md 与 .txt / load .md and .txt
+    # 加载 .md 与 .txt（glob 支持列表，别用字符类硬凑）/ load .md and .txt
     loader = DirectoryLoader(
-        dir_path, glob="**/*.[mt][dx]t", loader_cls=TextLoader,
+        dir_path, glob=["**/*.md", "**/*.txt"], loader_cls=TextLoader,
         loader_kwargs={"encoding": "utf-8"},
     )
     docs = loader.load()

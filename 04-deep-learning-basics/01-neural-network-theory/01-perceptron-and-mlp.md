@@ -140,11 +140,11 @@ for xi, yi in zip(X_xor, y_xor):
 XOR 为何不可分？
               x₂
               │
-  (0,1)=1  ● │ ● (1,1)=0
+  (0,1)=1  ● │ ○ (1,1)=0
               │
   ────────────┼────────── x₁
               │
-  (0,0)=0  ○ │ ○ (1,0)=1
+  (0,0)=0  ○ │ ● (1,0)=1
               │
 
 无法用一条直线将 ● 和 ○ 分开！
@@ -428,25 +428,25 @@ print(f"深层参数量 / Deep params: {sum(p.numel() for p in deep.parameters()
 
 **练习 4：** 修改 `TransformerFFN` 类，实现 **GLU (Gated Linear Unit)** 变体：
 ```
-FFN_GLU(x) = (xW₁ ⊙ GELU(xW_gate)) W₂
+FFN_SwiGLU(x) = (xW₁ ⊙ SiLU(xW_gate)) W₂
 ```
-这是 LLaMA 等现代大模型使用的 FFN 结构。
+这是 LLaMA 使用的 **SwiGLU** 结构（门控用 SiLU/Swish）；Gemma 则用 GELU 门控（GeGLU），二者都是 GLU 变体。
 
 > **参考答案：**
 > ```python
-> class GLU_FFN(nn.Module):
->     """Gated Linear Unit FFN (LLaMA-style)."""
+> class SwiGLU_FFN(nn.Module):
+>     """SwiGLU FFN (LLaMA-style，门控用 SiLU/Swish)."""
 >     
 >     def __init__(self, d_model: int = 768, d_ff: int = 3072):
 >         super().__init__()
 >         self.w1 = nn.Linear(d_model, d_ff, bias=False)
 >         self.w_gate = nn.Linear(d_model, d_ff, bias=False)
 >         self.w2 = nn.Linear(d_ff, d_model, bias=False)
->         self.gelu = nn.GELU()
+>         self.silu = nn.SiLU()  # SiLU/Swish 门控，LLaMA 采用
 >     
 >     def forward(self, x: torch.Tensor) -> torch.Tensor:
 >         # Shape: [B, S, d_model] -> [B, S, d_ff] -> [B, S, d_model]
->         return self.w2(self.w1(x) * self.gelu(self.w_gate(x)))
+>         return self.w2(self.w1(x) * self.silu(self.w_gate(x)))
 > ```
 
 **练习 5：** 一个 MLP 结构为 [784, 512, 256, 128, 10]，请计算：
@@ -454,5 +454,5 @@ FFN_GLU(x) = (xW₁ ⊙ GELU(xW_gate)) W₂
 2. 单次前向传播的浮点运算数（FLOPs，只算乘法）
 
 > **参考答案：**
-> 1. 参数量: 784×512+512 + 512×256+256 + 256×128+128 + 128×10+10 = **534,794**
-> 2. FLOPs: 784×512 + 512×256 + 256×128 + 128×10 = **565,248**
+> 1. 参数量: 784×512+512 + 512×256+256 + 256×128+128 + 128×10+10 = **567,434**
+> 2. FLOPs: 784×512 + 512×256 + 256×128 + 128×10 = **566,528**

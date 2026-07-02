@@ -338,8 +338,7 @@ optimizer.step()
 
 # 大模型训练中的典型设置：
 # Typical settings in LLM training:
-# max_norm = 1.0 (GPT-2, GPT-3)
-# max_norm = 0.3 (LLaMA)
+# max_norm = 1.0 (GPT-2, GPT-3, LLaMA)
 ```
 
 ## 5. 例题（Worked Examples）

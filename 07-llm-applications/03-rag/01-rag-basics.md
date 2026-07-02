@@ -194,7 +194,9 @@ Chunk 大小的权衡：
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
+llm = ChatOpenAI(model="gpt-4o-mini")
 prompt = ChatPromptTemplate.from_template(
     "根据以下上下文回答问题。\n\n上下文：{context}\n\n问题：{input}"
 )
@@ -283,7 +285,7 @@ docs = hybrid.invoke("项目的技术架构是什么？")
 ```python
 from sentence_transformers import CrossEncoder
 
-reranker = CrossEncoder("BAAI/bge-reranker-base")
+reranker = CrossEncoder("BAAI/bge-reranker-v2-m3")  # v2-m3 取代旧 reranker-base，与 3.4 一致
 query = "项目的技术架构是什么？"
 candidates = vs.similarity_search(query, k=20)            # 粗召回 / coarse recall
 

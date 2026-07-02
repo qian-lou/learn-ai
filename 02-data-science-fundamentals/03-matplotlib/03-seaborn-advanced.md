@@ -145,17 +145,31 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-# 构造长格式数据 / Construct long-format data
-data = pd.DataFrame({
-    'Model': np.repeat(['BERT', 'GPT-3.5', 'LLaMA'], 50),
+# 构造宽格式数据：3 个模型 × 3 个指标，各 50 次评估 / Construct wide-format data
+n = 50
+wide = pd.DataFrame({
+    'Model': np.repeat(['BERT', 'GPT-3.5', 'LLaMA'], n),
     'Accuracy': np.concatenate([
-        np.random.normal(0.80, 0.02, 50),
-        np.random.normal(0.88, 0.015, 50),
-        np.random.normal(0.92, 0.01, 50)
+        np.random.normal(0.80, 0.02, n),
+        np.random.normal(0.88, 0.015, n),
+        np.random.normal(0.92, 0.01, n)
+    ]),
+    'F1-Score': np.concatenate([
+        np.random.normal(0.78, 0.02, n),
+        np.random.normal(0.86, 0.015, n),
+        np.random.normal(0.90, 0.01, n)
+    ]),
+    'ROC-AUC': np.concatenate([
+        np.random.normal(0.85, 0.02, n),
+        np.random.normal(0.91, 0.015, n),
+        np.random.normal(0.95, 0.01, n)
     ])
 })
+
+# melt 成长格式（Model × Metric × Value 三列），hue='Metric' 即可在同一张图并排展示三个指标
 # Time: O(N), Space: O(N)
-sns.boxplot(data=data, x='Model', y='Accuracy')
-plt.title('Accuracy Distribution across Models')
+long_df = wide.melt(id_vars='Model', var_name='Metric', value_name='Value')
+sns.boxplot(data=long_df, x='Model', y='Value', hue='Metric')
+plt.title('Metric Distributions across Models')
 plt.show()
 ```

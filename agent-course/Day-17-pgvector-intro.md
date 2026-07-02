@@ -21,7 +21,7 @@
 两个要点：
 
 - **距离 vs 相似度**：pgvector 的 `<=>` 返回的是**余弦距离** = `1 - 余弦相似度`，所以**越小越相似**，`ORDER BY ... ASC` 取最近。别和昨天的"分数越大越好"搞反。
-- **索引可以later**：几千条数据**不建索引也很快**（顺序扫一遍），开发期先别折腾索引。等数据上百万、查询变慢，再加 HNSW（`CREATE INDEX ... USING hnsw (emb vector_cosine_ops)`）。这是典型的"先跑通、再优化"。
+- **索引可以后置**：几千条数据**不建索引也很快**（顺序扫一遍），开发期先别折腾索引。等数据上百万、查询变慢，再加 HNSW（`CREATE INDEX ... USING hnsw (emb vector_cosine_ops)`）。这是典型的"先跑通、再优化"。
 
 > **2026 提示**：pgvector 现已支持 `halfvec`（半精度，省一半存储）和并行索引构建。本节用基础 `vector` 类型即可。要在云上，Supabase、Neon、阿里云 RDS 都内置了 pgvector。
 
@@ -139,7 +139,7 @@ python day17_pgvector.py
 ## 5. 延伸 & 关联
 
 - 想看 pgvector 的索引：百万级数据上 `CREATE INDEX ON docs USING hnsw (emb vector_cosine_ops)`，再对比建索引前后的查询延迟。
-- 其他向量库横向对比（Chroma/Milvus/Qdrant/Weaviate 等）：本仓库下方第二个链接有完整表格。
+- 其他向量库横向对比（Chroma/Milvus/Qdrant/Weaviate 等）：完整表格见 [../07-llm-applications/03-rag/02-vector-databases.md](../07-llm-applications/03-rag/02-vector-databases.md)（即下方第一个链接）。
 - 本仓库已有的相关章节：
   - 向量数据库总览（含 pgvector 在内的横评）：[../07-llm-applications/03-rag/02-vector-databases.md](../07-llm-applications/03-rag/02-vector-databases.md)
   - RAG 基础概念：[../07-llm-applications/03-rag/01-rag-basics.md](../07-llm-applications/03-rag/01-rag-basics.md)

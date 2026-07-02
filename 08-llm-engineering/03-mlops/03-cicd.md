@@ -61,9 +61,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
+      - uses: actions/checkout@v4    # 拉取代码，否则 docker build 找不到 Dockerfile
       - name: Deploy to production
         run: |
-          docker build -t llm-api:${{ github.sha }} .
+          docker build -t registry/llm-api:${{ github.sha }} .    # 镜像名须与 push 一致
           docker push registry/llm-api:${{ github.sha }}
           kubectl set image deployment/llm-api llm-api=registry/llm-api:${{ github.sha }}
 ```
@@ -166,6 +167,9 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     steps:
+    - name: 拉取代码 / Checkout repository   # context: . 需要工作区先 checkout
+      uses: actions/checkout@v4
+
     - name: 登录 Docker Hub / Login to Docker Hub
       uses: docker/login-action@v3
       with:

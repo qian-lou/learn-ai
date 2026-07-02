@@ -5,7 +5,7 @@
 
 > **为什么要学这个？**
 >
-> Python 的 `with` 语句等价于 Java 的 `try-with-resources`（`AutoCloseable`）。用于自动管理资源——文件、数据库连接、GPU 内存、分布式锁。在大模型开发中，`torch.no_grad()`、`torch.cuda.amp.autocast()` 都是上下文管理器。
+> Python 的 `with` 语句等价于 Java 的 `try-with-resources`（`AutoCloseable`）。用于自动管理资源——文件、数据库连接、GPU 内存、分布式锁。在大模型开发中，`torch.no_grad()`、`torch.amp.autocast("cuda")` 都是上下文管理器（旧写法 `torch.cuda.amp.autocast` 自 PyTorch 2.4 起已废弃）。
 >
 > 对于 Java 工程师来说，理解 `with` 就是理解 `try-with-resources` 的 Python 版本，但 Python 版本更灵活——可以用装饰器和生成器快速创建。
 
@@ -113,8 +113,8 @@ import torch
 with torch.no_grad():
     predictions = model(input_data)
 
-# 2. 混合精度训练
-with torch.cuda.amp.autocast():
+# 2. 混合精度训练（旧写法 torch.cuda.amp.autocast 自 PyTorch 2.4 起已废弃）
+with torch.amp.autocast("cuda"):
     output = model(input)
     loss = criterion(output, target)
 
@@ -146,14 +146,18 @@ __exit__(self, exc_type, exc_val, exc_tb):
 
 ```python
 # 组合使用
+import numpy as np              # 模块级导入，函数体与 with 体共用同一个 np
+from contextlib import contextmanager
+
 @contextmanager
 def temp_seed(seed: int):
     """临时设置随机种子 / Temporarily set random seed."""
-    import numpy as np
     state = np.random.get_state()
     np.random.seed(seed)
-    yield
-    np.random.set_state(state)
+    try:
+        yield
+    finally:
+        np.random.set_state(state)  # 放 finally：异常时也恢复原状态 / restore even on error
 
 with temp_seed(42):
     print(np.random.randn(3))  # 可复现

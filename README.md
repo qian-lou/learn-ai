@@ -199,22 +199,22 @@
 
 ```bash
 # 数据科学
-pip install numpy pandas matplotlib seaborn scikit-learn
+uv add numpy pandas matplotlib seaborn scikit-learn
 
 # 深度学习
-pip install torch torchvision
+uv add torch torchvision
 
 # 大模型
-pip install transformers datasets peft trl accelerate
+uv add transformers datasets peft trl accelerate
 
 # RAG & Agent
-pip install langchain langchain-openai chromadb faiss-cpu
+uv add langchain langchain-openai chromadb faiss-cpu
 
 # 模型服务
-pip install vllm fastapi uvicorn
+uv add vllm fastapi uvicorn
 
 # 实验管理
-pip install wandb mlflow
+uv add wandb mlflow
 ```
 
 ---

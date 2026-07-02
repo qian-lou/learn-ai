@@ -81,7 +81,7 @@ def handle_json(description: str) -> str:
     Returns:
         给用户看的结果字符串 / a display string for the user.
     """
-    completion = client.beta.chat.completions.parse(
+    completion = client.chat.completions.parse(
         model=MODEL,
         messages=[
             {"role": "system", "content": "把用户描述解析为一个任务对象。"},

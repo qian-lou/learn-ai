@@ -205,9 +205,9 @@ import torch.nn as nn
 # Residual connection (core of ResNet/Transformer)
 # ============================================================
 class ResidualBlock(nn.Module):
-    """残差块 / Residual block.
+    """残差块 / Residual block（Pre-Norm 结构）.
     
-    output = LayerNorm(x + SubLayer(x))
+    output = x + SubLayer(LayerNorm(x))
     """
     
     def __init__(self, d_model: int, d_ff: int, dropout: float = 0.1):

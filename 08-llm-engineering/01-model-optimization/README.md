@@ -21,7 +21,7 @@
 ### 01 · 模型量化（Quantization）
 
 - **核心概念**：用更低的位宽表示权重（乃至激活），以可接受的精度损失换取显存/体积/速度——本质是"对模型权重做有损压缩"。
-- **关键公式/API**：线性量化 `x_int = round(x_float / scale) + zero_point`，反量化 `x_dequant = (x_int - zero_point) * scale`。最该记的落地 API：`BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")`（运行时 NF4）与 `torchao` 的 `quantize_(model, int4_weight_only(group_size=128))`（一行 weight-only 量化）。
+- **关键公式/API**：线性量化 `x_int = round(x_float / scale) + zero_point`，反量化 `x_dequant = (x_int - zero_point) * scale`。最该记的落地 API：`BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")`（运行时 NF4）与 `torchao` 的 `quantize_(model, Int4WeightOnlyConfig(group_size=128))`（一行 weight-only 量化；函数式 `int4_weight_only()` 自 0.9/0.10 起已弃用）。
 - **易错点**：① NF4 假设权重服从正态分布，与均匀 INT4 不同，别混为一谈；② 量化粒度决定质量，`per-group`（如 128）优于 `per-channel` 优于 `per-tensor`，group_size 越小越准但略增体积；③ 2026 年仓库已变——`TheBloke` 停更、`AutoGPTQ` 基本停维护，GGUF 取自 `bartowski/unsloth`，离线量化改用 `GPTQModel` 或 `llm-compressor`。
 - **Java 视角**：等同于 JPEG 有损压缩之于图片——牺牲人眼/模型难以察觉的细节，换来数量级的体积下降；量化方案选型就像选压缩算法（速度 vs 质量 vs 兼容性）。
 - **前置**：无（阶段内起点），但需理解 FP16/BF16 与显存占用的关系。

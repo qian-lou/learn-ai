@@ -82,8 +82,9 @@ col_means = matrix.mean(axis=0)      # Shape: [768]
 # ❌ 创建多个临时数组（内存 3x）
 result = np.sqrt(a**2 + b**2)
 
-# ✅ 用 out 参数原地计算（内存 1x）
+# ✅ 用 out 参数原地计算（内存 2x：temp + result 两块可复用缓冲，vs 反例 line 83 的多块临时数组）
 temp = np.empty_like(a)
+result = np.empty_like(a)
 np.multiply(a, a, out=temp)        # temp = a²
 np.multiply(b, b, out=result)      # result = b²  (复用)
 np.add(temp, result, out=result)   # result = a² + b²

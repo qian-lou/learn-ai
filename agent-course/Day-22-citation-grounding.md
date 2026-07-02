@@ -73,10 +73,11 @@ def build_store() -> PGVector:
     return store
 
 
-def answer(query: str, k: int = 3, min_sim: float = 0.4) -> CitedAnswer:
+def answer(store: PGVector, query: str, k: int = 3, min_sim: float = 0.4) -> CitedAnswer:
     """检索→（阈值拦截）→结构化生成带引用的答案 / retrieve, gate, then cite.
 
     Args:
+        store: 已建好的向量库（建库一次、复用多次）/ prebuilt vector store.
         query: 用户问题 / user question.
         k: 召回块数 / number of chunks.
         min_sim: 相似度阈值，低于此值视为'库外' / below this = out-of-KB.
@@ -84,7 +85,6 @@ def answer(query: str, k: int = 3, min_sim: float = 0.4) -> CitedAnswer:
     Returns:
         CitedAnswer：含 answer 与 citations / answer plus its sources.
     """
-    store = build_store()
     # 带分数检索，便于阈值判断 / retrieve with scores for thresholding
     hits = store.similarity_search_with_relevance_scores(query, k=k)
     kept = [(d, s) for d, s in hits if s >= min_sim]
@@ -109,8 +109,9 @@ def answer(query: str, k: int = 3, min_sim: float = 0.4) -> CitedAnswer:
 
 def main() -> None:
     """对比库内问题与库外问题 / in-KB vs out-of-KB."""
+    store = build_store()  # 建库一次，问答复用 / build once, reuse per query
     for q in ["pgvector 怎么算相似度？", "如何在 AWS 上配置 VPC？"]:
-        r = answer(q)
+        r = answer(store, q)
         print(f"\nQ: {q}\nA: {r.answer}\n出处 / citations: {r.citations}")
 
 

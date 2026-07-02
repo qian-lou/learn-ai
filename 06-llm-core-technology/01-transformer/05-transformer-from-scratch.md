@@ -294,7 +294,7 @@ print(generate(model, "To be"))
 ### 4.1 权重共享（Weight Tying）
 
 ```
-GPT/LLaMA 中 embedding 和 output head 共享权重：
+GPT-2 等模型中 embedding 和 output head 共享权重：
   self.token_emb.weight = self.head.weight
 
 为什么？
@@ -303,6 +303,10 @@ GPT/LLaMA 中 embedding 和 output head 共享权重：
   
   它们是"互逆"操作，共享权重减少参数量
   vocab_size=50000, d_model=4096 → 节省 200M 参数
+
+注意：并非所有模型都共享。LLaMA 系列（1/2/3）不做权重共享
+  （HF 配置 tie_word_embeddings=False），输入嵌入与 LM Head
+  各占 vocab×d 参数，是两份独立权重。
 ```
 
 ### 4.2 与真实 LLaMA 的差异

@@ -47,6 +47,8 @@
 ### 3.2 BPE 算法详解
 
 ```python
+import re
+
 # ============================================================
 # BPE (Byte Pair Encoding) 算法原理
 # BPE Algorithm Principle
@@ -88,12 +90,14 @@ def learn_bpe(corpus: list[str], num_merges: int = 10):
         best_pair = max(pairs, key=pairs.get)
         print(f"Merge #{i+1}: {best_pair} (freq={pairs[best_pair]})")
         
-        # 执行合并
+        # 执行合并：用词边界正则避免跨 token 误合并（Sennrich 原实现同款）
         new_vocab = {}
         bigram = ' '.join(best_pair)
         replacement = ''.join(best_pair)
+        # (?<!\S)/(?!\S) 确保只在完整 token 边界处替换
+        pattern = re.compile(r'(?<!\S)' + re.escape(bigram) + r'(?!\S)')
         for word in vocab:
-            new_word = word.replace(bigram, replacement)
+            new_word = pattern.sub(replacement, word)
             new_vocab[new_word] = vocab[word]
         vocab = new_vocab
 
@@ -183,7 +187,7 @@ BPE 是一种无监督的子词切分算法：
 ```python
 from typing import List, Dict
 
-# 定义已习得的合并规则优先级（分值越高越优先合并） / Define learned merge rules and scores
+# 定义已习得的合并规则：值为学习顺序 rank，越小越先合并（BPE 推理按学习顺序依次应用） / Learned merge rules, value = learning-order rank (smaller merges first)
 merge_rules: Dict[tuple, int] = {
     ('l', 'o'): 1,
     ('lo', 'w'): 2,
@@ -209,13 +213,13 @@ def bpe_tokenize_word(word: str, rules: Dict[tuple, int]) -> List[str]:
         # 统计当前词中所有的相邻元组 / Get all current adjacent bigrams
         pairs = [(tokens[i], tokens[i+1]) for i in range(len(tokens) - 1)]
         
-        # 寻找匹配合并规则中最优的一个元组进行合并 / Find best pair matching rules
+        # 寻找匹配规则中 rank 最小（最先学到）的元组合并 / Find pair with smallest rank
         best_pair = None
-        best_rank = -1
+        best_rank = float('inf')
         for pair in pairs:
             if pair in rules:
                 rank = rules[pair]
-                if rank > best_rank:
+                if rank < best_rank:
                     best_rank = rank
                     best_pair = pair
                     
@@ -256,5 +260,5 @@ print(bpe_tokenize_word("newest", merge_rules)) # ['newest', '</w>']
 ### 进阶题
 **练习 2**：有些分词器（如 LLaMA 使用的 SentencePiece）会把空格作为普通的控制字符 ` ` 包含在内，而有些分词器（如 BERT）在分词前会通过 RegEx 直接剔除掉所有连续空格。请分析这两种空格处理机制对跨语言文本重建（特别是保留代码缩进）有什么不同的工程影响？
 *参考答案*：
-- **SentencePiece（LLaMA/T5 风格）**：由于将空格视为普通字符（如用 `_` 代表空格），分词是完全无损的可逆过程（Round-trip Lossless）。我们可以完美从 token IDs 解码还原包括连续空格、制表符在内的原始格式。这在**代码生成模型（Code LLM）**上至关重要，能保证代码缩进不丢失。
+- **SentencePiece（LLaMA/T5 风格）**：由于将空格视为普通字符（如用 `▁`（U+2581）代表空格），分词是完全无损的可逆过程（Round-trip Lossless）。我们可以完美从 token IDs 解码还原包括连续空格、制表符在内的原始格式。这在**代码生成模型（Code LLM）**上至关重要，能保证代码缩进不丢失。
 - **WordPiece/RegEx清洗（BERT 风格）**：在预处理阶段会将多余空格合并或裁剪。这意味着分词后再做 decode 还原文本时，无法完美重建原始字符级排版（如丢失缩进和格式），这对于长文本重建、格式高度敏感的下游代码编译等任务会带来工程缺陷。

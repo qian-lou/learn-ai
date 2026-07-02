@@ -129,7 +129,7 @@ if __name__ == "__main__":
         print(f"agent 被安全中止 / aborted safely: {exc}")
 ```
 
-运行多跑几次：你会看到工具偶发失败被静默重试掉；若把 `max_tokens` 调到 `5000`，会看到"token 预算超限"被干净地拦下。
+运行多跑几次：你会看到工具偶发失败被静默重试掉；若把 `max_tokens` 调到 `2000`（小于单步估算的 2500），第一步 `charge_tokens` 就会先于终止判断触发"token 预算超限"，被干净地拦下。
 
 ### Agent 可靠性语义：重试一个已扣款的工具会怎样？（2026 补充，Java 后端强项）
 
@@ -167,7 +167,12 @@ def execute_tool_once(key: str, tool, args: dict) -> str:
 ## 3. 今日任务
 
 1. 跑通 `day36_robust_agent.py`，连跑 5 次，观察 `call_flaky_tool` 的瞬时失败被重试吸收。
-2. **触发每一道防线**：分别把 `max_tokens=5000`、`deadline_s=0.001`、把 `action` 写死成常量后注释掉终止条件，确认四种中止理由都能被打印出来。
+2. **逐条触发四道防线**（注意：`step 0` 因 `observation` 恒真会立即 `return`，多步防线要先破除这个早退分支）：
+   - **重试**：什么都不改，把失败概率临时调高（见任务 3），观察 `call_flaky_tool` 的自动重试。
+   - **token 预算**：只把 `max_tokens=2000`（小于单步 2500）。`step 0` 的 `charge_tokens` 先于终止判断执行，当场触发"token 预算超限"——无需改循环。
+   - **整体超时**：注释掉第 118 行 `if observation: return` 早退分支，同时把 `action` 改成**每步不同**（如 `action = f"search-{step}"`）以避开死循环检测，再设 `deadline_s=0.001`；累计几步后 `check_deadline` 触发"整体超时"。
+   - **死循环**：注释掉早退分支，保持 `action` 为**固定常量**；连续 3 步相同动作后 `detect_loop` 触发"死循环"。
+   确认这四种中止理由都能被独立打印出来。
 3. **加一个"重试耗尽"路径**：把 `call_flaky_tool` 的失败概率改成 `0.95`，确认 4 次重试耗尽后异常被最外层捕获，打印的是友好中文提示。
 
 **验收标准**：四道防线各能被独立触发并打印明确原因；重试耗尽时不抛裸栈；正常路径下偶发工具失败对最终结果无影响。
@@ -184,7 +189,7 @@ def execute_tool_once(key: str, tool, args: dict) -> str:
 
 ## 5. 延伸 & 关联
 
-- 工具异常的基础处理（本仓库第 8 天打底）：[../07-llm-applications/05-langchain/02-agents-and-tools.md](../07-llm-applications/05-langchain/02-agents-and-tools.md)
+- 工具异常的基础处理（Day 10 工具错误处理打底）：[../07-llm-applications/05-langchain/02-agents-and-tools.md](../07-llm-applications/05-langchain/02-agents-and-tools.md)
 - LangGraph 里实现循环与上限的官方做法：本课程 Day 28（循环）会把这里的 `max_steps` 对应到 graph 的 `recursion_limit`。
 - 生产监控视角（为什么这些中止理由必须能被 trace 到）：[../08-llm-engineering/03-mlops/02-evaluation-and-monitoring.md](../08-llm-engineering/03-mlops/02-evaluation-and-monitoring.md)
 - 上下文超长截断策略（token 预算的"软"对策）：本课程 Day 11（记忆与会话状态）。

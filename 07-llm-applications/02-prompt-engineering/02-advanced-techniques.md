@@ -4,7 +4,7 @@
 
 > **为什么要学这个？**
 >
-> 基础 Prompt 技巧解决简单任务，但复杂推理需要**高级策略**。Chain-of-Thought（思维链）让 GPT-4 的数学能力提升 30%，ReAct 让模型能够调用工具完成真实任务。
+> 基础 Prompt 技巧解决简单任务，但复杂推理需要**高级策略**。Chain-of-Thought（思维链）在 GSM8K 数学基准上把准确率从约 ~55% 提到 ~92%（约 37 个百分点，示例数据），ReAct 让模型能够调用工具完成真实任务。
 >
 > 这些技巧是构建 AI Agent 的理论基础。
 >
@@ -51,10 +51,10 @@ Let's think step by step.（让我们一步步思考。）
 
 
 # ============================================================
-# CoT 的效果（GPT-4 在 GSM8K 数学基准上）:
+# CoT 的效果（GPT-4 在 GSM8K 数学基准上，示例数据）:
 # ============================================================
 # 无 CoT: ~55% 准确率
-# 有 CoT: ~92% 准确率 → 提升 37%！
+# 有 CoT: ~92% 准确率 → 约提升 37 个百分点！
 ```
 
 ### 3.2 ReAct（Reasoning + Acting）
@@ -171,8 +171,8 @@ class Review(BaseModel):  # Pydantic 即 schema / schema-as-code
     topics: List[str]
     score: int  # 1-5
 
-# parse() 直接回传已校验的 Pydantic 实例 / returns a validated instance
-completion = client.beta.chat.completions.parse(
+# parse() 直接回传已校验的 Pydantic 实例；新版 SDK 用去 beta 的稳定路径 / stable path
+completion = client.chat.completions.parse(
     model="gpt-4o-mini",
     messages=[{"role": "user", "content": "评论：环境优雅、服务周到，但价格偏高。"}],
     response_format=Review,  # 等价于 {"type":"json_schema", "json_schema":{...}}
@@ -233,10 +233,153 @@ cot_prompt = """
 
 **练习 1：** 用 CoT 解决 5 道小学数学题，对比有 / 无 CoT 的答案准确率。
 
+*参考答案*：同一批题目跑两版 prompt——直接问 vs 追加"一步步思考"，各自抽取末尾数字与标准答案比对，统计命中率。
+
+```python
+import re
+from openai import OpenAI
+client = OpenAI()
+
+# (题目, 标准答案) / (question, gold)
+problems = [
+    ("15 个苹果卖了 8 个又进 12 个，现在多少个？", 19),
+    ("小明有 23 元，买 3 本 5 元的书，找回多少元？", 8),
+    ("一列火车 60km/h 跑 2.5 小时走多远(km)？", 150),
+    ("班里 45 人，男生比女生多 7 人，男生几人？", 26),
+    ("一箱 24 瓶，喝掉四分之三，还剩几瓶？", 6),
+]
+
+def ask(q: str, cot: bool) -> str:
+    # 有 CoT 追加触发句，无 CoT 强制只给数字 / with/without the trigger sentence
+    suffix = "\n请一步步思考，最后一行只写数字答案。" if cot else "\n只输出数字答案。"
+    return client.chat.completions.create(
+        model="gpt-4o-mini", temperature=0,
+        messages=[{"role": "user", "content": q + suffix}]
+    ).choices[0].message.content
+
+def last_int(text: str) -> int | None:
+    nums = re.findall(r"-?\d+", text)          # 取末尾数字作最终答案 / final number
+    return int(nums[-1]) if nums else None
+
+def accuracy(cot: bool) -> float:
+    hits = sum(last_int(ask(q, cot)) == gold for q, gold in problems)
+    return hits / len(problems)
+
+print(f"无 CoT: {accuracy(False):.0%} | 有 CoT: {accuracy(True):.0%}")
+# 预期：有 CoT 明显更高，尤其多步题 / CoT wins on multi-step problems
+```
+
 **练习 2：** 实现 Self-Consistency，对比单次采样和 5 次投票的效果。
+
+*参考答案*：调高 temperature 采样多条推理路径，抽取各自答案后取众数——比单条采样更抗随机波动。
+
+```python
+import re
+from collections import Counter
+from openai import OpenAI
+client = OpenAI()
+
+question = ("一个水池有进水管和出水管。进水管 6 小时注满，出水管 8 小时放空。"
+            "两管同开，多少小时注满？请一步步思考，最后一行只写数字答案。")
+
+def sample_answer(temperature: float) -> float | None:
+    text = client.chat.completions.create(
+        model="gpt-4o-mini", temperature=temperature,
+        messages=[{"role": "user", "content": question}]
+    ).choices[0].message.content
+    nums = re.findall(r"-?\d+\.?\d*", text)
+    return float(nums[-1]) if nums else None
+
+# 单次采样：一条路径，受随机性影响 / single path
+single = sample_answer(temperature=0.7)
+
+# Self-Consistency：多条路径投票取众数 / majority vote over n paths
+# 时间 O(n) 采样 空间 O(n) 存答案
+votes = [a for _ in range(5) if (a := sample_answer(0.7)) is not None]
+final = Counter(votes).most_common(1)[0][0] if votes else None
+print(f"单次: {single} | 5 次投票: {final} (票数分布 {Counter(votes)})")
+# 正确答案 24；投票通常比单次更稳定命中 / voting is more robust
+```
 
 ### 进阶题
 
 **练习 3：** 实现一个简单的 ReAct Agent：集成搜索工具和计算器。
 
+*参考答案*：手写最小 ReAct 循环——system prompt 约定 `Thought/Action/Observation` 协议，代码解析模型输出的 Action、执行工具、把结果作为 Observation 回灌，直到出现 `Answer`。
+
+```python
+import re
+from openai import OpenAI
+client = OpenAI()
+
+# ---- 工具集 / tools ----
+def search(q: str) -> str:  # 这里用 mock，真实场景接搜索 API / mock search
+    kb = {"埃菲尔铁塔高度": "330 米", "光速": "约 300000 km/s"}
+    return next((v for k, v in kb.items() if k in q), "未找到")
+
+def calc(expr: str) -> str:
+    # 仅解析数字与四则运算，绝不用 eval / safe arithmetic, never eval
+    if not re.fullmatch(r"[\d\.\s\+\-\*\/\(\)]+", expr):
+        return "非法表达式"
+    import ast, operator as op
+    ops = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul, ast.Div: op.truediv}
+    def ev(node):
+        if isinstance(node, ast.Constant): return node.value
+        if isinstance(node, ast.BinOp):    return ops[type(node.op)](ev(node.left), ev(node.right))
+        raise ValueError
+    return str(ev(ast.parse(expr, mode="eval").body))
+
+TOOLS = {"search": search, "calc": calc}
+
+SYSTEM = """你是 ReAct Agent，按如下协议逐步作答，每次只输出一行：
+Thought: <推理>
+Action: <search 或 calc>[<参数>]
+拿到 Observation 后继续；得出结论时输出：
+Answer: <最终答案>"""
+
+def react(question: str, max_steps: int = 5) -> str:
+    msgs = [{"role": "system", "content": SYSTEM},
+            {"role": "user", "content": question}]
+    for _ in range(max_steps):                       # 限制步数防死循环 / cap loops
+        out = client.chat.completions.create(
+            model="gpt-4o-mini", temperature=0, messages=msgs
+        ).choices[0].message.content.strip()
+        msgs.append({"role": "assistant", "content": out})
+        if out.startswith("Answer:"):
+            return out
+        m = re.search(r"Action:\s*(\w+)\[(.*?)\]", out)   # 解析工具调用 / parse action
+        obs = TOOLS[m.group(1)](m.group(2)) if m and m.group(1) in TOOLS else "无效 Action"
+        msgs.append({"role": "user", "content": f"Observation: {obs}"})
+    return "超出最大步数"
+
+print(react("埃菲尔铁塔的高度乘以 3 是多少米？"))
+```
+
 **练习 4：** 设计 Tree-of-Thought prompt，解决 24 点游戏。
+
+*参考答案*：ToT 让模型显式"广度搜索"——每步生成多个候选中间状态、自评保留有希望的分支，而非一条路走到黑。用一个 prompt 引导它枚举分支并剪枝。
+
+```python
+from openai import OpenAI
+client = OpenAI()
+
+# ToT prompt：要求模型分层展开候选、自评剪枝、回溯 / branch, self-evaluate, backtrack
+TOT_PROMPT = """用 Tree-of-Thought 方法解 24 点：给定 4 个数，用 + - * / 和括号算出 24，每个数用一次。
+
+按以下步骤显式搜索，不要一步到位：
+1. 【展开】从 4 个数中任选两个做一次运算，列出 3-5 个有希望的中间结果（3 个数的新状态）。
+2. 【自评】给每个中间状态标注 "可能/不太可能" 到达 24，剪掉不太可能的分支。
+3. 【递归】对保留的分支重复步骤 1-2，直到只剩一个数。
+4. 若某分支等于 24，输出完整算式；若走不通，回溯换分支。
+
+数字：{numbers}
+最后一行给出：答案：<完整算式> = 24"""
+
+def solve_24(numbers: list[int]) -> str:
+    return client.chat.completions.create(
+        model="gpt-4o-mini", temperature=0,
+        messages=[{"role": "user", "content": TOT_PROMPT.format(numbers=numbers)}]
+    ).choices[0].message.content
+
+print(solve_24([4, 6, 8, 2]))   # 如 (8-6)*(4+8)? 由模型搜索给出 / model searches a valid expr
+```

@@ -81,8 +81,8 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
 Meta LLaMA 系列:
   LLaMA-1 (2023): 7B-65B, 开源先驱
-  LLaMA-2 (2023): 7B-70B, 加入 GQA, 4K→32K 上下文
-  LLaMA-3 (2024): 8B-70B, 15T tokens 训练, 128K 上下文
+  LLaMA-2 (2023): 7B-70B, 70B 引入 GQA（7B/13B 仍为 MHA）, 上下文 2K→4K（可经 RoPE 外推至 32K+）
+  LLaMA-3/3.1 (2024): 8B-405B, 15T tokens 训练, 初版 3.0 为 8K，3.1 起支持 128K 上下文
 
 阿里 Qwen 系列:
   Qwen-2 (2024): 0.5B-72B, 中英双语优化

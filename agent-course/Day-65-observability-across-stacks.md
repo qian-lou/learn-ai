@@ -101,8 +101,9 @@ public class OrderService {
     @Observed(name = "order.refund", contextualName = "refund")
     @Transactional
     public RefundResultVO refund(RefundRequestDTO request) {
-        // 方法体同 Day 62;span 由 @Observed 自动开合,无需手写 / span is automatic
-        return doRefundWithIdempotency(request);
+        // ...同 Day 62 的方法体:幂等查重 + 金额上限/可退额度校验 + doRefund + saveWithKey...
+        // span 由 @Observed 自动开合,无需手写 / span is automatic
+        // return result;
     }
 }
 ```

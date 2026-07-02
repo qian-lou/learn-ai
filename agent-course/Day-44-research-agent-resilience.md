@@ -37,6 +37,8 @@ Shows only the deltas vs Day 43.
 
 from __future__ import annotations
 
+import sqlite3
+
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
@@ -79,8 +81,12 @@ def build_graph_v2():
     g.add_edge("report", END)
 
     # 关键：编译时挂持久化后端 / the key line — attach the checkpointer
-    with SqliteSaver.from_conn_string("research.sqlite") as saver:
-        return g.compile(checkpointer=saver)
+    # 用 from_conn_string 的 with 写法，连接会随函数返回而关闭，后续 invoke 必然失败。
+    # 这里手动持有连接、直接构造 SqliteSaver，让它跨 invoke/进程重启存活。
+    # check_same_thread=False：LangGraph 会在别的线程读写该连接。
+    conn = sqlite3.connect("research.sqlite", check_same_thread=False)
+    saver = SqliteSaver(conn)
+    return g.compile(checkpointer=saver)
 
 
 if __name__ == "__main__":

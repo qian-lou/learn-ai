@@ -23,8 +23,17 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder, L
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.compose import ColumnTransformer
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
 import numpy as np
 import pandas as pd
+
+# ============================================================
+# 0. 构造演示数据 / Build demo data（使本片段可独立运行）
+# ============================================================
+X, y = make_classification(n_samples=200, n_features=20, n_informative=10, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+df = pd.DataFrame({'category': ['a', 'b', 'a', 'c']})  # 类别特征示例
 
 # ============================================================
 # 1. 数值特征处理 / Numeric features

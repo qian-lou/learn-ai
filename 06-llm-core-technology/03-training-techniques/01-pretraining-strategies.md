@@ -51,9 +51,9 @@
 
 3. Span Corruption — T5:
 
-  原文: "Thank you for <X> me to your party <Y> week"
+  原文: "Thank you for inviting me to your party last week"
   输入: "Thank you <X> me to your party <Y> week"
-  目标: "<X> for inviting <Y> last </s>"
+  目标: "<X> for inviting <Y> last <Z>"
   
   随机遮盖连续片段（spans），而非单个词
   → 更好地学习短语和句法结构
@@ -63,8 +63,10 @@
 
 ```python
 # ============================================================
-# 大模型预训练数据组成（以 LLaMA-2 为例）
-# Pretraining data composition (LLaMA-2 example)
+# 大模型预训练数据组成（以 LLaMA-1 为例，Touvron et al. 2023, Table 1）
+# Pretraining data composition (LLaMA-1 official mix)
+# 注：LLaMA-2 未公开数据配比（仅称 a new mix of publicly available data），
+#     此处为 LLaMA-1 官方配比。
 # ============================================================
 
 data_mix = {

@@ -324,6 +324,7 @@ print(f"加载了 {len(matched_dict)}/{len(pretrained_dict)} 个参数")
 import torch
 import torch.nn as nn
 import os
+import re
 
 class TrainingManager:
     """训练管理器：封装保存、加载、恢复逻辑 / Training manager."""
@@ -354,9 +355,12 @@ class TrainingManager:
     
     def load_latest(self) -> int:
         """加载最新的检查点 / Load latest checkpoint."""
-        checkpoints = sorted([
-            f for f in os.listdir(self.save_dir) if f.startswith('checkpoint_')
-        ])
+        # 按 epoch 数值排序，避免字典序把 epoch10 排在 epoch2 之前
+        # Sort by numeric epoch, not lexicographically
+        checkpoints = sorted(
+            [f for f in os.listdir(self.save_dir) if f.startswith('checkpoint_epoch')],
+            key=lambda f: int(re.search(r'epoch(\d+)', f).group(1)),
+        )
         if not checkpoints:
             return 0
         

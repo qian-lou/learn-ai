@@ -170,6 +170,7 @@ for t in texts:
 
 ```python
 import re
+import unicodedata
 
 def clean_chinese(text: str) -> str:
     """中文文本清洗 / Chinese text cleaning."""
@@ -190,8 +191,8 @@ def clean_chinese(text: str) -> str:
 数据清洗质量维度（参考 LLaMA 论文）：
 
 1. 去重 (Deduplication): ~30% 数据是重复的
-   - 精确去重：MinHash + LSH
-   - 近似去重：SimHash
+   - 精确去重：内容哈希（MD5/SHA-256）完全匹配（见本文 3.2 节的 MD5 去重）
+   - 近似去重：MinHash + LSH、SimHash
    
 2. 语言检测：过滤非目标语言文档
    - 工具：fastText langdetect, lingua
@@ -220,9 +221,14 @@ from dataclasses import dataclass
 class CleaningStats:
     total: int = 0
     passed: int = 0
-    too_short: int = 0
-    duplicate: int = 0
-    low_quality: int = 0
+
+# 你的原始语料（每个元素是一篇待清洗文本）/ your raw corpus
+raw_corpus = [
+    "This is a reasonably long English sentence that should pass all filters.",
+    "x",                                   # 太短，长度过滤拦下
+    "<h1>SPAM AD</h1>",                    # 太短，长度过滤拦下
+    "This is a reasonably long English sentence that should pass all filters.",  # 与首条重复，去重拦下
+]
 
 # 统计清洗过程
 stats = CleaningStats()

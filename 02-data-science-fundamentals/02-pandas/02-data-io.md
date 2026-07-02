@@ -27,7 +27,7 @@ import pandas as pd
 # ============================================================
 df = pd.read_csv("data.csv", encoding="utf-8")
 df = pd.read_csv("data.csv", usecols=["name", "age"])  # 只读指定列
-df = pd.read_csv("large.csv", chunksize=10000)  # 分块读取大文件
+reader = pd.read_csv("large.csv", chunksize=10000)  # 返回迭代器，需 for chunk in reader 逐块处理（见 ④）
 
 df.to_csv("output.csv", index=False, encoding="utf-8")
 
@@ -146,7 +146,7 @@ CSV 读取的三道开销 / Three costs of reading CSV:
 
 本质矛盾：CSV 没有保存任何类型信息（一切都是文本），也没有列的边界元数据，所以**每次读取都要把整份文件重新解析一遍**。对比 Java：用 Jackson/OpenCSV 解析 CSV 同样要逐字段 tokenize + 反序列化，慢的根因一致——文本解析无法避免。
 
-加速 CSV 读取的工程手段：① 传 `dtype` 跳过推断；② 传 `usecols` 少读列；③ 用 `engine="pyarrow"`（pandas 2.x 起，PyArrow 引擎多线程解析，比默认 C 引擎更快）；④ 直读压缩包 `compression="gzip"` 省 I/O。但**根治之道是换列式格式**。
+加速 CSV 读取的工程手段：① 传 `dtype` 跳过推断；② 传 `usecols` 少读列；③ 用 `engine="pyarrow"`（pandas 1.4 起提供，PyArrow 引擎多线程解析，比默认 C 引擎更快；注意与 §4.3 pandas 2.0 才有的 `dtype_backend="pyarrow"` 是两回事）；④ 直读压缩包 `compression="gzip"` 省 I/O。但**根治之道是换列式格式**。
 
 ### 4.2 Parquet 为什么快？—— 列式存储 + Row Group + 谓词下推
 

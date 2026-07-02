@@ -25,7 +25,7 @@
 ```
 1. optimizer.zero_grad()    # 清零梯度（避免累积）
 2. output = model(x)        # 前向传播
-3. loss = criterion(y, ŷ)   # 计算损失
+3. loss = criterion(ŷ, y)   # 计算损失（预测在前，标签在后）
 4. loss.backward()           # 反向传播（计算梯度）
 5. optimizer.step()          # 更新参数
 ```

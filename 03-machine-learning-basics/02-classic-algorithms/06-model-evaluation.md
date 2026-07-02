@@ -115,7 +115,7 @@ print(f"F1 调和均值 / F1-Score: {f1:.4f}")
 如果数据集中 99% 的样本为负类，若模型全部盲猜负类，Accuracy 依然能达到 99%（看似完美，实则对正类毫无识别能力）。F1-Score 同时考虑了精确率与召回率的调和均值，若对少数类的召回率很低或精确率很低，F1-Score 都会迅速降低，能够更客观地反映模型在关键类别上的性能。
 
 ### 进阶题
-**练习 2**：编写代码，使用 `cross_val_score` 对线性模型在波士顿房价数据集（或生成数据集）上进行 5 折交叉验证，输出每一折的 RMSE 并计算平均均方根误差。
+**练习 2**：编写代码，使用 `cross_val_score` 对线性模型在加州房价数据集（`fetch_california_housing`）或生成数据集上进行 5 折交叉验证，输出每一折的 RMSE 并计算平均均方根误差。
 *参考答案*：
 ```python
 from sklearn.datasets import make_regression

@@ -30,8 +30,9 @@ LangGraph 是**显式状态机**：你画图、连边、管 state——强控制
 **Step 1 — 装 CrewAI（独立框架，不依赖 LangGraph）**
 
 ```bash
-pip install -U crewai            # 需 Python 3.10~3.13 / requires 3.10<=py<3.14
-export OPENAI_API_KEY="sk-..."   # CrewAI 默认走 OpenAI / defaults to OpenAI
+pip install -U crewai                    # 需 Python 3.10~3.13 / requires 3.10<=py<3.14
+export OPENAI_API_KEY="sk-..."           # CrewAI 默认走 OpenAI / defaults to OpenAI
+export CREWAI_TELEMETRY_OPT_OUT=true     # 生产/隐私：关遥测（环境变量控制）/ disable telemetry
 ```
 
 **Step 2 — 用 Agent / Task / Crew 复刻 研究员→撰写**
@@ -83,8 +84,7 @@ crew = Crew(
     tasks=[research_task, write_task],
     process=Process.sequential,
     verbose=True,
-    telemetry=False,          # 生产/隐私：关遥测 / disable telemetry
-)
+)   # 关遥测靠环境变量 CREWAI_TELEMETRY_OPT_OUT，不是 Crew 参数 / opt out via env var
 
 
 if __name__ == "__main__":
@@ -105,7 +105,7 @@ crew_h = Crew(
     tasks=[research_task, write_task],
     process=Process.hierarchical,
     manager_llm="gpt-4o-mini",   # 经理用哪个模型决策 / model the manager uses to route
-    verbose=True, telemetry=False,
+    verbose=True,
 )
 # kickoff 后观察：经理会决定先调谁、要不要返工 / the manager decides ordering
 ```

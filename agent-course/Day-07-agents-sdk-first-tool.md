@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
 ## 5. 延伸 & 关联
 
-- **Claude Agent SDK 对照**：`from claude_agent_sdk import tool, ClaudeSDKClient`，用 `@tool("name", "desc", {...})` 定义工具，再 `async with ClaudeSDKClient(...) as client: await client.query(...)`。装饰器生成 schema、框架托管循环——和今天一模一样的思路，只是 API 命名不同。
+- **Claude Agent SDK 对照**：`from claude_agent_sdk import tool, create_sdk_mcp_server, ClaudeAgentOptions, ClaudeSDKClient`。接线比 Agents SDK 多一步：用 `@tool("name", "desc", {...})` 定义工具 → `create_sdk_mcp_server(name="...", tools=[...])` 把它们打包成进程内 MCP server → 经 `ClaudeAgentOptions(mcp_servers={...}, allowed_tools=[...])` 挂给 `ClaudeSDKClient`，再 `async with ClaudeSDKClient(options=...) as client: await client.query(...)`。装饰器生成 schema、框架托管循环——和今天一样的思路，只是工具要先经 MCP server 接入、API 命名不同。
 - 框架虽方便，但**别跳过 Day 6**：线上排障时，你需要知道黑盒里那两次请求长什么样。
 - 关联章节：
   - 手写版三段式（黑盒拆解）：[../agent-course/Day-06-tool-calling-basics.md](./Day-06-tool-calling-basics.md)

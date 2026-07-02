@@ -27,8 +27,8 @@ LoRA 数学原理：
 LoRA 前向传播: h = W·x + BA·x
 
 W: 原始权重 (冻结，不训练)       — 如 [4096, 4096]
-B: 降维矩阵 (训练)  — [4096, r]   r=16 远小于 4096
-A: 升维矩阵 (训练)  — [r, 4096]
+A: 降维矩阵 (训练)  — [r, 4096]   把 4096 维输入投影到 r 维 (r=16 远小于 4096)
+B: 升维矩阵 (训练)  — [4096, r]   把 r 维还原回 4096 维
 
 参数量对比:
   原始: 4096 × 4096 = 16.7M
@@ -293,8 +293,8 @@ ds = load_dataset("json", data_files="sft.jsonl", split="train")
 trainer = SFTTrainer(
     model=model, train_dataset=ds,
     args=SFTConfig(output_dir="./qlora_out", per_device_train_batch_size=4,
-                   gradient_accumulation_steps=4, bf16=True, max_seq_length=1024),
-    processing_class=tok)  # TRL 0.12+ 用 processing_class / use processing_class
+                   gradient_accumulation_steps=4, bf16=True, max_length=1024),
+    processing_class=tok)  # TRL 0.12+ 用 processing_class；max_length 为 TRL 0.20+ 参数名
 trainer.train()
 ```
 

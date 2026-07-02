@@ -121,7 +121,7 @@ print(f"归一化图像形状 / Normalized image shape: {normalized_image.shape}
 import numpy as np
 # Time: O(N^2), Space: O(N^2)
 matrix = np.ones((3, 3))
-bias = np.array([[1], [2], [3]])  # Shape: [3, 1] 使得它沿列广播到行
+bias = np.array([1, 2, 3])  # Shape: [3] 一维行向量，沿行广播，每一行都加 [1, 2, 3]
 result = matrix + bias
 print(result)
 ```

@@ -107,7 +107,7 @@ CE = -log(p_correct)
 
 ### 例题 1：朴素贝叶斯分类器的概率推导与计算 / Naive Bayes Probability Derivation
 
-在垃圾邮件分类中，我们需要计算 $P(	ext{Spam} \mid 	ext{Words}) \propto P(	ext{Spam}) \prod P(	ext{Word}_i \mid 	ext{Spam})$。本例题演示如何计算这个条件概率。
+在垃圾邮件分类中，我们需要计算 $P(\text{Spam} \mid \text{Words}) \propto P(\text{Spam}) \prod P(\text{Word}_i \mid \text{Spam})$。本例题演示如何计算这个条件概率。
 
 ```python
 import numpy as np
@@ -153,7 +153,7 @@ print(f"偏度: {skew(data)}")
 ```
 
 ### 进阶题
-**练习 2**：在大模型（如 GPT）生成文本采样中，我们需要理解 Softmax 与温度（Temperature）的影响。给定对数概率向量 `logits`，利用不同的 Temperature 参数对其进行缩放，并计算对应的概率分布。分析 $T 	o 0$ 和 $T 	o \infty$ 时的概率特征。
+**练习 2**：在大模型（如 GPT）生成文本采样中，我们需要理解 Softmax 与温度（Temperature）的影响。给定对数概率向量 `logits`，利用不同的 Temperature 参数对其进行缩放，并计算对应的概率分布。分析 $T \to 0$ 和 $T \to \infty$ 时的概率特征。
 *参考答案*：
 ```python
 import numpy as np

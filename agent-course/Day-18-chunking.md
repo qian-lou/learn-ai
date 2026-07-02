@@ -75,7 +75,13 @@ def main() -> None:
 
     # 策略二：语义切分（在语义跳变处下刀）/ semantic chunking
     emb = HuggingFaceEmbeddings(model_name="BAAI/bge-m3")
-    semantic = SemanticChunker(emb, breakpoint_threshold_type="percentile")
+    semantic = SemanticChunker(
+        emb,
+        breakpoint_threshold_type="percentile",
+        # 默认断句正则 (?<=[.?!])\s+ 只认英文标点+空白；中文无空格会被当成单句。
+        # 显式传中文标点断句，SemanticChunker 才能逐句嵌入并在主题跳变处下刀。
+        sentence_split_regex=r"(?<=[。！？])",
+    )
     show("语义切分", semantic.split_text(DOC))
 
 
@@ -90,6 +96,8 @@ python day18_chunk.py
 ```
 
 预期：**固定大小**会切出若干长度相近的块（约 80 字、相邻块尾首重叠）；**语义切分**通常切成 **2 块**——正好在"RAG 主题 → Postgres 主题"的跳变处断开。你能直观看到语义切分"沿主题边界下刀"的特点。
+
+> **中文必踩的坑**：`SemanticChunker` 默认断句正则是 `(?<=[.?!])\s+`，只认**英文标点 + 空白**。中文用『。』分句且句间无空格，会被整段当成**单句**——单句输入时 `SemanticChunker` 直接原样返回（只有 1 块，甚至不会真正调 embedding），主题边界根本切不出来。所以上面**显式传了** `sentence_split_regex=r"(?<=[。！？])"`，让它按中文标点先拆句，再逐句嵌入、比相似度。处理中文文本时这一步不能省。
 
 > 注意：语义切分会对每句调 embedding，比固定切分慢得多。小文档无所谓，大批量要掂量成本。
 

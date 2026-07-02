@@ -75,7 +75,8 @@ class SelfAttention(nn.Module):
         """
         Args:
             x: 输入序列 / Input sequence. Shape: [B, N, D]
-            mask: 注意力掩码 / Attention mask. Shape: [B, 1, N, N] or [1, 1, N, N]
+            mask: 注意力掩码 / Attention mask. Shape: [N, N] / [1, N, N] / [B, N, N]
+                  （本类无头维，scores 为 3 维；若传入 4 维掩码会自动压掉头维）
         
         Returns:
             输出 / Output. Shape: [B, N, D]
@@ -93,6 +94,8 @@ class SelfAttention(nn.Module):
         
         # 3. 应用掩码 / Apply mask
         if mask is not None:
+            if mask.dim() == 4:  # 兼容 [*, 1, N, N] 的 4 维掩码：压掉头维
+                mask = mask.squeeze(1)
             scores = scores.masked_fill(mask == 0, float('-inf'))
         
         # 4. Softmax 归一化 / Softmax normalization
@@ -134,6 +137,10 @@ print(mask.squeeze())
 #         [1., 1., 1., 1.]])
 # 位置 i 只能看到 ≤ i 的位置
 ```
+
+> 该 4 维掩码 `[1, 1, N, N]` 是为带头维的 MHA 设计的；直接传给上面无头维的
+> `SelfAttention.forward` 时，`forward` 内已用 `mask.squeeze(1)` 兼容处理，
+> 压成 `[1, N, N]` 后可正确广播到 3 维 scores `[B, N, N]`。
 
 ### 3.4 注意力矩阵的可视化理解
 

@@ -236,7 +236,7 @@ class BottleneckBlock(nn.Module):
 - 唯一的解释是：**SGD 难以让普通堆叠层学到恒等映射**。深层网络梯度传播不畅，优化器找不到那个"至少不更差"的解。
 - ResNet 的对策：把映射改写为 `H(x) = F(x) + x`，让"学恒等映射"变成"把残差 F(x) 学成 0"——后者对优化器容易得多（权重趋近 0 即可），从而解决退化问题。
 
-**练习 2：** 用 `torchvision.models.resnet18(pretrained=True)` 对 CIFAR-10 做迁移学习，只训练最后的全连接层。
+**练习 2：** 用 `torchvision.models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)` 对 CIFAR-10 做迁移学习，只训练最后的全连接层。
 
 *参考答案*：
 

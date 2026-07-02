@@ -140,7 +140,8 @@ print(t)                # (1, [2, 3, 4])
 
 # 元组解包的进阶用法 / advanced unpacking
 first, *rest = [1, 2, 3, 4]   # first=1, rest=[2, 3, 4]（星号收集）
-a, b = b, a                    # 一行交换，无需临时变量 / swap without temp
+a, b = 1, 2                    # 先赋值 / init
+a, b = b, a                    # 一行交换，无需临时变量 / swap without temp（现在 a=2, b=1）
 ```
 
 ## 4. 详细推理（Deep Dive）
@@ -228,7 +229,7 @@ for batch in make_batches(data, batch_size=4):
     print(batch)  # [0,1,2,3] -> [4,5,6,7] -> [8,9]（末批不满，符合预期）
 ```
 
-要点：用**切片 + 生成器**避免把所有 batch 一次性堆进内存——这正是 §4.1 提到的"已知规模也别滥用大列表"的实战体现；切片对越界自动截断，省去手写边界判断。对应 Java 需手写 `subList` 加 `Math.min` 边界，远不如此简洁。
+要点：用**切片 + 生成器**避免把所有 batch 一次性堆进内存——这与 §4.2 的思路互补：不需要全量物化时用切片逐批产出，避免一次性堆入内存；切片对越界自动截断，省去手写边界判断。对应 Java 需手写 `subList` 加 `Math.min` 边界，远不如此简洁。
 
 ## 6. 习题（Exercises）
 

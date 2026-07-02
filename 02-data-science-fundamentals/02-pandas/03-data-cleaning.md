@@ -63,7 +63,6 @@ df_no_outliers = df[mask]
 # 4. 类型转换 / Type conversion
 # ============================================================
 df["age"] = df["age"].astype(int)
-df["name"] = df["name"].astype("category")  # 节省内存
 
 # ============================================================
 # 5. 字符串清洗 / String cleaning
@@ -71,6 +70,9 @@ df["name"] = df["name"].astype("category")  # 节省内存
 df["name"] = df["name"].str.strip()         # 去空格
 df["name"] = df["name"].str.lower()         # 转小写
 # df["text"] = df["text"].str.replace(r'\s+', ' ', regex=True)
+
+# 字符串规整完成后再转 category（.str 访问器会把 category 退回 object，故须放在最后）
+df["name"] = df["name"].astype("category")  # 节省内存
 ```
 
 ## 4. 详细推理（Deep Dive）

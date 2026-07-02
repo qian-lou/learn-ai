@@ -25,11 +25,25 @@
 **Step 1 — 依赖与配置**
 
 ```xml
-<!-- pom.xml：引入 Spring AI BOM + OpenAI starter / Spring AI deps -->
-<dependency>
-    <groupId>org.springframework.ai</groupId>
-    <artifactId>spring-ai-starter-model-openai</artifactId>
-</dependency>
+<!-- pom.xml：先用 BOM 统一版本，再引 OpenAI starter（starter 无需写 version）-->
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-bom</artifactId>
+            <version>1.0.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-starter-model-openai</artifactId>
+    </dependency>
+</dependencies>
 ```
 
 ```yaml

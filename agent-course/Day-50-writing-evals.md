@@ -100,7 +100,7 @@ def judge(question: str, context: str, answer: str) -> Judgement:
         "1) grounded：回答的每个事实是否都能在【资料】中找到依据，编造则为 false（幻觉）。\n"
         "2) helpfulness：是否切题、清晰、完整（1~5）。先在 reasoning 里逐条分析再判定。"
     )
-    completion = client.beta.chat.completions.parse(
+    completion = client.chat.completions.parse(  # 结构化输出 GA 后的正式路径（无 beta 前缀）
         model=JUDGE_MODEL,
         messages=[
             {"role": "system", "content": rubric},

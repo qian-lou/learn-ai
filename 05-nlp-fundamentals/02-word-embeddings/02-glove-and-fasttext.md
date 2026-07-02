@@ -29,14 +29,14 @@ GloVe = Global Vectors for Word Representation
 
 核心思想：利用词-词共现矩阵中的统计信息
 
-共现矩阵 X（以窗口大小 2 为例）：
+共现矩阵 X（以窗口大小 2，即左右各 2 个词为例）：
   语料: "the cat sat on the mat"
   
        the  cat  sat  on  mat
-  the   0    1    0   0    1
-  cat   1    0    1   0    0
-  sat   0    1    0   1    0
-  on    0    0    1   0    1
+  the   0    1    2   1    1
+  cat   1    0    1   1    0
+  sat   2    1    0   1    0
+  on    1    1    1   0    1
   mat   1    0    0   1    0
 
 目标函数：

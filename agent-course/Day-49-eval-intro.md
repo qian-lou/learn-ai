@@ -92,7 +92,7 @@ class Sentiment(BaseModel):
 # ---- 被测系统(System Under Test)：一次情感分类 / the system under test ----
 def classify(text: str) -> str:
     """对一段文本做情感分类，返回标签字符串 / classify sentiment."""
-    completion = client.beta.chat.completions.parse(
+    completion = client.chat.completions.parse(  # 结构化输出 GA 后的正式路径（无 beta 前缀）
         model=MODEL,
         messages=[
             {"role": "system", "content": "判断这条评论的情感，只输出 positive/neutral/negative 之一。"},

@@ -28,7 +28,7 @@ X, y_true = make_blobs(n_samples=500, centers=4, random_state=42)
 # ============================================================
 # KMeans
 # ============================================================
-kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+kmeans = KMeans(n_clusters=4, random_state=42, n_init='auto')
 labels = kmeans.fit_predict(X)
 print(f"Silhouette Score: {silhouette_score(X, labels):.4f}")
 print(f"聚类中心: {kmeans.cluster_centers_.shape}")
@@ -36,7 +36,7 @@ print(f"聚类中心: {kmeans.cluster_centers_.shape}")
 # 肘部法则选择 K
 inertias = []
 for k in range(2, 10):
-    km = KMeans(n_clusters=k, random_state=42, n_init=10)
+    km = KMeans(n_clusters=k, random_state=42, n_init='auto')
     km.fit(X)
     inertias.append(km.inertia_)
 # 画图找"肘部"拐点
@@ -44,6 +44,9 @@ for k in range(2, 10):
 # ============================================================
 # DBSCAN（基于密度）
 # ============================================================
+# ⚠️ 此处硬编码 eps=0.5 仅为演示 API 调用；在这份 make_blobs 数据上它其实
+#    会得到 6 簇 + 67 个噪声点（真实只有 4 簇），是反模式。
+#    正确做法（数据驱动定 eps）见 3.4 节与例题 2。
 dbscan = DBSCAN(eps=0.5, min_samples=5)
 labels_db = dbscan.fit_predict(X)
 n_clusters = len(set(labels_db)) - (1 if -1 in labels_db else 0)
@@ -66,9 +69,10 @@ $$J = \sum_{k=1}^{K}\sum_{x\in C_k}\|x-\mu_k\|^2$$
 **k-means++ 初始化**（sklearn 默认 `init='k-means++'`）：先随机选第一个中心，之后每个新中心以正比于 $D(x)^2$（到已选最近中心距离的平方）的概率被选中，让初始中心尽量散开。它把期望逼近比从普通随机的无界改善到 $O(\log K)$，显著减少坏局部最优。
 
 ```python
-# 2026 sklearn 1.5+：n_init 默认值已改为 'auto'
+# 2026 sklearn 1.4+：n_init 默认值已改为 'auto'
 #   配 k-means++ 时 'auto' = 1（一次足够好），配随机初始化时 = 10
-#   显式写死 n_init=10 会触发"未来默认值变更"的语义差异，新代码用 'auto'
+#   不传参时默认值已由 10 变为 'auto'；显式写死 n_init=10 会保持旧行为
+#   （k-means++ 下比 'auto' 多跑 9 次），新代码统一用 'auto'
 kmeans = KMeans(n_clusters=4, init='k-means++', n_init='auto', random_state=42)
 ```
 
@@ -219,7 +223,7 @@ X, _ = make_blobs(n_samples=500, centers=4, n_features=2, random_state=42)
 inertias = []
 k_range = range(1, 8)
 for k in k_range:
-    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init='auto')
     kmeans.fit(X)
     inertias.append(kmeans.inertia_)
 
@@ -291,4 +295,4 @@ if n_clusters >= 2 and mask.sum() > n_clusters:
 ### 进阶题
 **练习 2**：K-Means 容易陷入局部最优。在实际工程中，如何通过参数初始化优化这一缺陷？请说明 `init='k-means++'` 参数的工作机制。
 *参考答案*：
-使用 `init='k-means++'`。机制是：首先随机挑选第一个聚类中心，接着计算其他样本点到已选聚类中心的最短距离，以正比于这个距离平方的概率去挑选下一个聚类中心。这确保了初始聚类中心彼此相距尽可能远，能大大加快收敛并避免陷入次优局部解。\n
+使用 `init='k-means++'`。机制是：首先随机挑选第一个聚类中心，接着计算其他样本点到已选聚类中心的最短距离，以正比于这个距离平方的概率去挑选下一个聚类中心。这确保了初始聚类中心彼此相距尽可能远，能大大加快收敛并避免陷入次优局部解。

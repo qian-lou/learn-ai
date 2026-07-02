@@ -104,6 +104,17 @@ if __name__ == "__main__":
 
 运行后，`result` 是一个**真正的对象**：`result.score` 是 `int`，越界会在校验时报错；`result.actions` 是 `list`，可直接遍历。
 
+### 深入一层：strict 模式心智——`parse()` 之下发生了什么
+
+`parse(response_format=PydanticModel)` 并不是"提示模型 + 事后重试"，而是分两层保证：
+
+1. **SDK 层**：把 Pydantic 模型转成 JSON Schema，以 `response_format={"type": "json_schema", "json_schema": {..., "strict": true}}` 发给 API；拿到回复后再反序列化成模型实例（即 `.parsed`）。
+2. **解码层（constrained decoding，约束解码）**：strict 模式下，服务端把 JSON Schema 编译成语法（可理解为状态机），**每生成一个 token 前，先把所有不符合当前语法位置的 token 屏蔽掉**（概率置零），模型"想输出非法字符也采样不到"。所以合法 JSON、字段齐全、类型正确是**在生成过程中被硬约束的**，不是生成完再碰运气校验。
+
+分工要记清：**解码层保证"结构合法"**（字段名/类型/枚举必然正确；`minimum`/`maximum` 等范围关键字较新的模型也已支持，但支持面因模型/提供商而异），**Pydantic 在客户端补"业务校验"**——像 `ge=1, le=5` 这类范围约束别赌服务端一定强制，加上 schema 表达不了的跨字段业务规则，都靠 Pydantic 在解析时兜底拦截。两层合起来才是完整契约。
+
+**心智统一**：工具调用（function calling）本质也是结构化输出——模型生成的"工具参数 JSON"就是按 tool 的参数 JSON Schema 约束解码出来的，**tool schema 即输出 schema**；OpenAI 的工具定义同样支持 `strict: true`。Day 6 学工具调用时你会发现：它不过是"结构化输出 + 输出的结构恰好描述了一次函数调用，由你的代码去执行"。
+
 ## 对比：旧的 `json_object` 模式（了解即可，别再新写）
 
 ```python
@@ -137,6 +148,7 @@ data = json.loads(resp.choices[0].message.content)  # 拿到的是 dict，字段
 - [ ] 我知道用 `message.parsed` 取结果，并会先判 `message.refusal`。
 - [ ] 我能说出企业为何"必须"强类型输出（可靠/可维护/可校验/可演进）。
 - [ ] 我理解 `json_object` 与 Structured Outputs 的本质差距，且优先用后者。
+- [ ] 我能说清 strict 模式在解码层如何保证合法 JSON（constrained decoding / token 屏蔽），以及为什么"工具调用本质也是结构化输出"（tool schema 即输出 schema）。
 
 ## 5. 延伸 & 关联
 

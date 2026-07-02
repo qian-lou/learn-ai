@@ -8,6 +8,7 @@
 
 ## 🧭 怎么用
 
+- **开课前**：先过一遍每日计划里的「📚 开课前置（Day 0 自检）」（[../AI-Agent-每日学习计划.md](../AI-Agent-每日学习计划.md)）——环境自检 + 成本护栏，缺哪补哪。
 - **节奏**：每天 1 份（~2h），每周 5 天，周末复习。完成一天就把下面的 `☑` 勾掉。
 - **每份结构统一**：今日目标 & 产出 → 概念（含 Java 类比）→ 跟着做（可运行代码）→ 今日任务（带验收）→ 自测清单 → 延伸 & 关联。
 - **代码均为 2026 现代写法**（OpenAI/Claude SDK、LangGraph、pgvector、MCP/A2A、Langfuse、Spring AI 等）；前沿 SDK 迭代快，运行前请对一下本机实装版本。
@@ -22,8 +23,11 @@
 | **[Day 15](Day-15-data-query-agent.md)** | 数据查询 Agent（工具调用 + 结构化输出） | 入门作品 |
 | **[Day 25](Day-25-rag-capstone.md)** | 文档问答系统（完整 RAG，带引用） | ⭐ 面试高频 |
 | **[Day 45](Day-45-research-agent-wrapup.md)** | 自动化研究 Agent（多 Agent + 状态） | ⭐ 主力项目 |
-| **[Day 60](Day-60-capstone-ship-review.md)** | 生产级 Agent（监控 + Eval + 安全） | ⭐⭐ 最值钱 |
+| **[Day 60](Day-60-capstone-ship-review.md)** | 生产级 Agent（监控 + Eval + 安全 + 可复用 eval harness） | ⭐⭐ 最值钱 |
 | **[Day 70](Day-70-retrospective-and-roadmap.md)** | Java + Python 混合架构系统 | ⭐⭐ 差异化王牌 |
+
+> 每个里程碑按 **三档自评标尺** 勾选：🟩 跑通（demo 端到端不崩）→ 🟨 能讲清取舍（为什么这么设计、替代方案与代价）→ 🟥 能扛住追问（失败路径 / 成本 / 安全 / 规模）。
+> 并产出一张 **量化亮点卡**（前后对比指标 + 一句话讲法），如 `eval 准确率 71%→89%`、`p95 延迟 8s→2.3s`、`注入用例 20/20 拦截`。
 
 ---
 
@@ -32,7 +36,7 @@
 - ☐ **[Day 1](Day-01-first-call.md)** — 环境搭建 + 第一次模型调用
 - ☐ **[Day 2](Day-02-model-params.md)** — 模型参数 + 流式输出
 - ☐ **[Day 3](Day-03-prompt-basics.md)** — Prompt 基础：角色、few-shot、CoT
-- ☐ **[Day 4](Day-04-structured-output.md)** — 结构化输出：Pydantic + `parse` 拿强类型对象
+- ☐ **[Day 4](Day-04-structured-output.md)** — 结构化输出：Pydantic + `parse` 拿强类型对象 + 原生 JSON Schema 严格模式
 - ☐ **[Day 5](Day-05-chat-cli.md)** — 复盘 + 小项目：流式对话 CLI
 
 ## 🟢 Phase 1 · 单 Agent + 工具（Day 6–15）
@@ -73,7 +77,7 @@
 - ☐ **[Day 33](Day-33-agent-communication-shared-state.md)** — Agent 间通信与共享状态：怎么传、怎么不污染
 - ☐ **[Day 34](Day-34-crewai-overview.md)** — CrewAI 速览：角色化框架，对比 LangGraph 取舍
 - ☐ **[Day 35](Day-35-refactor-reusable.md)** — 复盘 + 重构：把多 Agent 系统抽成可复用结构
-- ☐ **[Day 36](Day-36-robustness.md)** — Agent 健壮性：重试 / 死循环 / token 超限 / 整体超时
+- ☐ **[Day 36](Day-36-robustness.md)** — Agent 健壮性：重试 / 死循环 / token 超限 / 整体超时 + 幂等与重放安全
 - ☐ **[Day 37](Day-37-mcp-protocol.md)** — MCP 协议：接一个现成 MCP server 当工具源
 - ☐ **[Day 38](Day-38-a2a-protocol.md)** — A2A 协议：Agent 间通信标准，解决什么问题
 - ☐ **[Day 39](Day-39-tool-orchestration.md)** — 复杂工具编排：工具 + 子 agent 完成一个复杂任务
@@ -89,17 +93,17 @@
 - ☐ **[Day 46](Day-46-observability-concepts.md)** — 可观测性概念：为什么 Agent 必须 trace
 - ☐ **[Day 47](Day-47-tracing-setup.md)** — 接入 tracing：Langfuse / LangSmith / OTel
 - ☐ **[Day 48](Day-48-trace-debugging.md)** — 看 trace 调试：用 token / 延迟 / 成本定位真实 bug
-- ☐ **[Day 49](Day-49-eval-intro.md)** — 评估（Eval）入门：把"它答得好不好"变成数字
-- ☐ **[Day 50](Day-50-writing-evals.md)** — 写 eval：准确率、幻觉率、回归测试与 LLM-as-judge
+- ☐ **[Day 49](Day-49-eval-intro.md)** — 评估（Eval）入门：把"它答得好不好"变成数字 + 数据集三来源 / benchmark 认知
+- ☐ **[Day 50](Day-50-writing-evals.md)** — 写 eval：准确率、幻觉率、回归测试与 LLM-as-judge + 轨迹级评估
 - ☐ **[Day 51](Day-51-cost-optimization.md)** — 成本优化：缓存、token 管理、控制上下文膨胀
-- ☐ **[Day 52](Day-52-model-routing.md)** — 智能路由：简单任务用小模型，难任务用大模型
-- ☐ **[Day 53](Day-53-prompt-injection.md)** — 安全①：Prompt 注入的原理与防御
+- ☐ **[Day 52](Day-52-model-routing.md)** — 智能路由：简单任务用小模型，难任务用大模型 + 推理模型选型
+- ☐ **[Day 53](Day-53-prompt-injection.md)** — 安全①：Prompt 注入的原理与防御 + 间接注入
 - ☐ **[Day 54](Day-54-guardrails-and-permissions.md)** — 安全②：工具权限边界、输出校验、guardrails、敏感数据
 - ☐ **[Day 55](Day-55-owasp-llm-top10.md)** — OWASP for LLM：逐条自查你的 Agent
 - ☐ **[Day 56](Day-56-deploy-fastapi-docker.md)** — 部署：把 Agent 包成 FastAPI 服务 + Docker
 - ☐ **[Day 57](Day-57-production-concerns.md)** — 生产关注点：限流 · 超时 · 并发 · 降级 · 健康检查
 - ☐ **[Day 58](Day-58-capstone-monitoring.md)** — 阶段项目①：给 Agent 服务加完整监控
-- ☐ **[Day 59](Day-59-capstone-eval-security.md)** — 阶段项目②：加 Eval 回归测试 + 安全防护
+- ☐ **[Day 59](Day-59-capstone-eval-security.md)** — 阶段项目②：加 Eval 回归测试 + 安全防护 + 数据飞轮 / CI 门禁
 - ☐ 🎯 **[Day 60](Day-60-capstone-ship-review.md)** — 完成 + 复盘：交付一个"能上线"的 Agent 服务
 
 ## 🟢 Phase 5 · 双栈架构 + 作品集（Day 61–70）
@@ -129,6 +133,22 @@
 | 5 | 双栈架构 + 作品集 | Day 61–70 | 70 |
 
 > 主力难点在 **Phase 3–4（Day 26–60）**，那 35 天别赶进度——它们才是和"只会写 demo 的人"拉开差距的地方。
+
+## 🔁 节奏与巩固
+
+- **缓冲日**：每个 Phase 末（Day 15 / 25 / 45 / 60 之后）留 0.5~1 天，补跑没跑通的代码、对齐依赖版本。
+- **每周回顾三件事**：① 不看笔记复述本周 3 个核心概念；② 重跑本周一个 demo，故意改坏一处看报错；③ 把本周的 Java 类比补进持续累积的对照表。
+
+---
+
+## 🧩 扩展 / 进阶主题（70 天之外）
+
+> 均为增量加餐，不占 Day 1–70 编号；按需深挖，非主线。
+
+- ☐ **[EX-01](EX-01-context-engineering.md)** — 上下文工程（P0）：预算分配、编排排序、压缩与子 agent 隔离
+- ☐ **[EX-02](EX-02-long-term-memory.md)** — 长期 / 跨会话记忆（P0）：记忆分层、写入 / 检索 / 遗忘、mem0 / Letta
+- ☐ **[EX-03](EX-03-agent-system-design.md)** — Agent 系统设计面试专项（P0）：可复用 checklist + 45 分钟白板题
+- 未成文主题（见[每日计划](../AI-Agent-每日学习计划.md)末尾）：RAG 进阶（P1，详见 [Day 23](Day-23-advanced-retrieval.md)）· computer-use / 浏览器 Agent（P2）· 多模态 Vision（P2）· 实时语音（P2）
 
 ---
 

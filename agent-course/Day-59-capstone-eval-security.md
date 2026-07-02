@@ -134,6 +134,18 @@ curl -s -XPOST localhost:8000/chat -H 'Content-Type: application/json' -d '{"mes
 curl -s -XPOST localhost:8000/chat -H 'Content-Type: application/json' -d '{"message":"正常问题"}'                        # PII 被脱敏
 ```
 
+**Part C — 数据飞轮：让 eval 集越滚越厚（2026 补充）**
+
+单跑一次 eval 只是快照；生产级做法是把它接成**闭环飞轮**，一行流程图：
+
+> **生产 trace → 挑失败样本 → 回灌 eval 集 → 迭代 prompt/工具/路由 → 灰度回归 → 再上线**（→ 产生新 trace，循环）
+
+- **生产 trace（Day 48）**：在 trace 平台（LangSmith / Langfuse）里按"用户差评 / 报错 / 超时 / 输出不合规"过滤，捞出失败运行——这是最真实的坏 case 来源，比拍脑袋编测试值钱得多。
+- **挑失败样本 → 回灌 eval 集（Day 49~50）**：把失败样本清洗、标注期望行为后加进 Part A 的 `DATASET` / `REGRESSION` 两张表；eval 集随线上流量持续长大，且要**版本化**——"eval 数据集就是护城河"。
+- **迭代 → 灰度回归 → 再上线（本日）**：针对失败样本改 prompt / 工具描述 / 路由策略，先跑 Part A 全量回归（老 case 一个不许挂，CI 门禁挡住劣化），再灰度小流量放量观察线上指标（Day 57 的 SLO / 成本护栏），都绿了才全量上线。
+
+对 Java 工程师这就是熟悉的运维闭环：**线上事故 → 复现测试 → 修复 → 回归 → 发布**，只是"事故"从 NPE 变成了幻觉或走错工具。飞轮每转一圈，eval 集厚一层、agent 稳一分——它把 Day 48 的 trace（数据源）、Day 49~50 的 eval（度量）和本日的回归（门禁）串成一台自我改进的机器，也是 Day 60 复盘最值得讲的闭环能力。
+
 ## 3. 今日任务
 
 1. **建 eval 测试集**（≥8 条），跑 `pytest`，记录通过率作为基线。
@@ -148,6 +160,7 @@ curl -s -XPOST localhost:8000/chat -H 'Content-Type: application/json' -d '{"mes
 - [ ] 我理解"LLM 输入永远不可信"，注入 ≈ 自然语言版的 XSS/SQL 注入。
 - [ ] 我能说出输入/输出/工具三道防线各防什么、对应 Java 的什么机制。
 - [ ] 我知道为什么"信任模型输出"是 agent 安全最大的误区。
+- [ ] 我能默写数据飞轮一行流程图（trace → 挑失败样本 → 回灌 eval 集 → 迭代 → 灰度回归 → 再上线），并说清 Day 48 / Day 49~50 / 本日各承担哪一环。
 
 ## 5. 延伸 & 关联
 

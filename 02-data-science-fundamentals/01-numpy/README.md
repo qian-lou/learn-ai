@@ -15,6 +15,7 @@
 | 03 | [broadcasting](./03-broadcasting.md) | 广播机制 | 从右向左对齐的三条广播规则、`keepdims`、`np.newaxis` 升维、Attention Mask 广播 |
 | 04 | [linear-algebra-ops](./04-linear-algebra-ops.md) | 线性代数运算 | `@` 矩阵乘、`inv/det/solve`、特征分解、SVD（LoRA 基础）、`einsum`、`norm` |
 | 05 | [performance-optimization](./05-performance-optimization.md) | 性能优化 | 向量化 vs 循环（100-1000x）、`np.where/maximum`、轴向聚合、`out=` 原地运算避免临时数组 |
+| 06 | [numerical-stability](./06-numerical-stability.md) | 数值精度与稳定性 | `float16/bfloat16` 位宽与动态范围、softmax 减最大值防 `nan`、`logsumexp`、`np.logaddexp` |
 
 ---
 
@@ -54,6 +55,13 @@
 - **易错点**：① `sum(a.tolist())` 用了 Python 内建 `sum`，比 `np.sum(a)` 慢百倍；② `a**2 + b**2` 会产生多个临时数组，大数组场景内存翻几倍，用 `out=` 原地算；③ 记不清 `axis`：`axis=0` 沿行方向压缩（得到每列结果），`axis=1` 沿列方向压缩（得到每行结果）。
 - **Java 视角**：向量化 ≈ 用 SIMD/并行流一次处理一批，而不是 `for(i…) a[i]+b[i]`；思考"维度和形状"而非"循环和索引"。
 - **前置**：01-04（是前四点的综合运用）。
+
+### 06 · 数值精度与稳定性
+- **核心概念**：会向量化不等于写对——照直写的 `np.exp(x)/np.exp(x).sum()` 在真实 logits 上会溢出成 `nan`；数值稳定性是 softmax/交叉熵/Attention 能跑起来的地基。
+- **关键 API**：softmax 减最大值 `np.exp(x - x.max())`、`logsumexp = m + np.log(np.exp(x-m).sum())`、成对稳定加法 `np.logaddexp(a, b)`、位宽查询 `np.finfo(np.float16).max`。
+- **易错点**：① `exp(大 logits)` 溢出 `inf`，`inf/inf` 得 `nan`——必须先减最大值（分子分母同乘常数，结果不变）；② 沿轴 softmax 时减最大值要配 `keepdims=True` 才能广播；③ 训练用 `bfloat16` 而非 `float16`——前者指数 8 位、动态范围同 `float32`（不易溢出），后者指数仅 5 位、上限约 65504。
+- **Java 视角**：类似 `int` 溢出回绕——浮点溢出不报错而是无声变 `inf/nan`，比 Java 更隐蔽，必须在算法层面（减最大值）预防而非事后 `catch`。
+- **前置**：01-05；数学上依赖 softmax/log 恒等式。
 
 ---
 

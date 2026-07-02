@@ -15,6 +15,7 @@
 | 03 | [positional-encoding](./03-positional-encoding.md) | 位置编码 | 正弦编码→可学习编码→RoPE→ALiBi，绝对 vs 相对、长度外推 |
 | 04 | [transformer-architecture](./04-transformer-architecture.md) | Transformer 完整架构 | Encoder/Decoder 三变体、FFN(SwiGLU)、残差、Pre-Norm vs Post-Norm、参数量估算 |
 | 05 | [transformer-from-scratch](./05-transformer-from-scratch.md) | 从零实现 Transformer | 纯 PyTorch 逐组件搭 GPT、权重共享、KV Cache、与真实 LLaMA 的差异 |
+| 06 | [efficient-attention](./06-efficient-attention.md) | 高效/长上下文注意力 | 为降 O(N²) 而改连接结构：滑动窗口(Mistral SWA)/稀疏+全局(Longformer/BigBird)/线性(Linformer/Performer)，与 FlashAttention「改算法 vs 改访存」划界 |
 
 ---
 

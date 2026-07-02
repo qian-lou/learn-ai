@@ -2,7 +2,7 @@
 
 > **面向 Java 后端工程师的 Python + LLM 系统学习路线**
 >
-> 从 Python 基础到大模型工程化部署，8 个阶段、103 个知识点，每个知识点均以 Java 对比视角编写。
+> 从 Python 基础到大模型工程化部署，8 个阶段、107 个知识点，每个知识点均以 Java 对比视角编写。
 
 ---
 
@@ -11,21 +11,23 @@
 | 阶段 | 主题 | 知识点数 | 关键内容 |
 |:----:|------|:-------:|---------|
 | 一 | [Python 基础](./01-python-basics/) | 20 | 环境管理、语法对比、数据结构、OOP、高级特性 |
-| 二 | [数据科学基础](./02-data-science-fundamentals/) | 13 | NumPy、Pandas、Matplotlib/Seaborn |
-| 三 | [机器学习基础](./03-machine-learning-basics/) | 12 | 数学基础、经典算法、Sklearn 实战 |
+| 二 | [数据科学基础](./02-data-science-fundamentals/) | 14 | NumPy、Pandas、Matplotlib/Seaborn |
+| 三 | [机器学习基础](./03-machine-learning-basics/) | 13 | 数学基础、经典算法、Sklearn 实战 |
 | 四 | [深度学习基础](./04-deep-learning-basics/) | 15 | 神经网络理论、PyTorch、CNN、RNN |
 | 五 | [NLP 基础](./05-nlp-fundamentals/) | 9 | 文本预处理、词嵌入、Seq2Seq/Attention |
-| 六 | [大模型核心技术](./06-llm-core-technology/) | 12 | Transformer、预训练模型、训练技术 |
-| 七 | [大模型应用实战](./07-llm-applications/) | 13 | HuggingFace、Prompt Engineering、RAG、微调、LangChain |
+| 六 | [大模型核心技术](./06-llm-core-technology/) | 13 | Transformer、预训练模型、训练技术 |
+| 七 | [大模型应用实战](./07-llm-applications/) | 14 | HuggingFace、Prompt Engineering、RAG、微调、LangChain |
 | 八 | [工程化与部署](./08-llm-engineering/) | 9 | 量化加速、模型服务、MLOps |
 
 > 📄 完整知识点树请参考 [OUTLINE.md](./OUTLINE.md)
+>
+> 🔧 关键库锁定版本与迁移点见 [VERSIONS.md](./VERSIONS.md)——「2026 现代写法」跑不通时先对版本。
 
 ---
 
 ## 🧠 知识点地图
 
-> 下面把 8 阶段 103 个知识点压缩成「每阶段最该掌握的核心簇」。
+> 下面把 8 阶段 107 个知识点压缩成「每阶段最该掌握的核心簇」。
 > 每条只讲**一件事**：这个点你真正要拿走的是什么。带 ⭐ 的是四个**能力跃迁里程碑**——过了它，你就换了一个段位。
 
 ### 阶段一 · Python 基础 · 20 点
@@ -39,7 +41,7 @@
 | 装饰器/生成器/上下文管理器 | 装饰器 ≈ AOP，生成器 ≈ 惰性 Stream，`with` ≈ try-with-resources |
 | 类型注解 + 异步 | `type hints` 是给人和 IDE 看的（运行时不强制）；`async/await` ≈ 单线程事件循环版的 `CompletableFuture` |
 
-### 阶段二 · 数据科学基础 · 13 点
+### 阶段二 · 数据科学基础 · 14 点
 
 | 核心簇 | 一句话抓住重点 |
 |--------|----------------|
@@ -49,7 +51,7 @@
 | 数据清洗 | 真实数据 80% 时间花在缺失值/重复值/类型转换上 |
 | 可视化 | Matplotlib 画一切，Seaborn 一行出统计图——探索数据的眼睛 |
 
-### 阶段三 · 机器学习基础 · 12 点
+### 阶段三 · 机器学习基础 · 13 点
 
 | 核心簇 | 一句话抓住重点 |
 |--------|----------------|
@@ -82,7 +84,7 @@
 | Seq2Seq | 编码器-解码器结构，机器翻译的经典范式 |
 | ⭐ 注意力机制 | **里程碑一**：搞懂 Attention 就搞懂了 LLM 的心脏——让模型自己决定「该看哪里」 |
 
-### 阶段六 · 大模型核心技术 · 12 点
+### 阶段六 · 大模型核心技术 · 13 点
 
 | 核心簇 | 一句话抓住重点 |
 |--------|----------------|
@@ -94,7 +96,7 @@
 | Scaling Laws | 参数量、数据量、算力与效果的幂律关系——大模型「大」的理论依据 |
 | 训练技术 | 预训练策略（MLM/CLM）+ 分布式（DDP/FSDP/DeepSpeed）+ 对齐（RLHF/DPO） |
 
-### 阶段七 · 大模型应用实战 · 13 点
+### 阶段七 · 大模型应用实战 · 14 点
 
 | 核心簇 | 一句话抓住重点 |
 |--------|----------------|

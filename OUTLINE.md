@@ -60,7 +60,8 @@
 │   ├── 02-indexing-and-slicing.md               # 索引与切片
 │   ├── 03-broadcasting.md                       # 广播机制
 │   ├── 04-linear-algebra-ops.md                 # 线性代数运算
-│   └── 05-performance-optimization.md           # 性能优化（向量化 vs 循环）
+│   ├── 05-performance-optimization.md           # 性能优化（向量化 vs 循环）
+│   └── 06-numerical-stability.md                # 数值精度与稳定性（float16/softmax/logsumexp）
 ├── 02-pandas/
 │   ├── 01-series-and-dataframe.md               # Series 与 DataFrame
 │   ├── 02-data-io.md                            # 数据读写（CSV/JSON/SQL）
@@ -86,7 +87,8 @@
 │   ├── 03-decision-tree-and-random-forest.md    # 决策树与随机森林
 │   ├── 04-svm.md                                # 支持向量机
 │   ├── 05-clustering.md                         # 聚类算法（K-Means/DBSCAN）
-│   └── 06-model-evaluation.md                   # 模型评估与调优
+│   ├── 06-model-evaluation.md                   # 模型评估与调优
+│   └── 07-gradient-boosting.md                  # 梯度提升（GBDT/XGBoost/LightGBM）
 └── 03-sklearn-practice/
     ├── 01-sklearn-pipeline.md                   # Scikit-learn Pipeline
     ├── 02-feature-engineering.md                # 特征工程
@@ -142,7 +144,8 @@
 │   ├── 02-multi-head-attention.md               # 多头注意力
 │   ├── 03-positional-encoding.md                # 位置编码
 │   ├── 04-transformer-architecture.md           # Transformer 完整架构
-│   └── 05-transformer-from-scratch.md           # 从零实现 Transformer
+│   ├── 05-transformer-from-scratch.md           # 从零实现 Transformer
+│   └── 06-efficient-attention.md                # 高效注意力（滑窗/稀疏/线性，破解 O(N²)）
 ├── 02-pretrained-models/
 │   ├── 01-bert.md                               # BERT 详解
 │   ├── 02-gpt-series.md                         # GPT 系列（GPT-1/2/3/4）
@@ -160,7 +163,8 @@
 ├── 01-huggingface/
 │   ├── 01-transformers-library.md               # Transformers 库入门
 │   ├── 02-datasets.md                           # Datasets 库入门与实战
-│   └── 03-trainer-api.md                        # Trainer API 微调实战
+│   ├── 03-trainer-api.md                        # Trainer API 微调实战
+│   └── 04-multimodal-inference.md               # 多模态推理与视觉 RAG（VLM/图文/视觉检索）
 ├── 02-prompt-engineering/
 │   ├── 01-prompt-basics.md                      # Prompt 基础与原则
 │   └── 02-advanced-techniques.md                # 高级 Prompt 技巧（CoT/ReAct/多轮对话）

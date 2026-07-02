@@ -107,26 +107,225 @@ async def batch_inference(prompts: list[str]) -> list[str]:
 # results = asyncio.run(batch_inference(prompts))
 ```
 
+### 3.4 流式消费（逐 token 打印）
+
+LLM 的「打字机效果」靠的是 **SSE 流式响应**：服务端把答案切成一个个 `data:` 事件推来，客户端边收边显示。异步天然适合——`async for` 让协程在等下一个 chunk 时把事件循环让给别人。对标 Java：这就是 WebFlux 的 `Flux<String>` / SSE，`async for` ≈ `flux.subscribe(...)` 逐元素回调，但语法是线性的。
+
+```python
+# ============================================================
+# 流式消费 LLM 响应 / Stream-consume LLM response
+# 需要 API key：export OPENAI_API_KEY=sk-...
+# pip install openai>=1.0
+# ============================================================
+import asyncio
+from openai import AsyncOpenAI
+
+async def stream_chat(prompt: str) -> str:
+    """逐 token 消费流式响应，边到边打印 / Consume stream token-by-token."""
+    client = AsyncOpenAI()  # 自动读取环境变量 OPENAI_API_KEY
+    full = []
+    # stream=True 返回一个异步迭代器 / returns an async iterator
+    resp = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        stream=True,
+    )
+    # 关键：async for 在等下一个 chunk 时让出事件循环 / yields loop while awaiting next chunk
+    async for chunk in resp:
+        delta = chunk.choices[0].delta.content or ""
+        print(delta, end="", flush=True)  # 边到边打印，不等整条 / print as it arrives
+        full.append(delta)
+    print()
+    return "".join(full)
+
+# asyncio.run(stream_chat("用一句话解释事件循环"))
+# 输出会像打字机一样逐字出现，而非等 3 秒后整段蹦出
+```
+
+要点：`resp` 本身是异步迭代器，`async for` 每取一个 chunk 就 `await` 一次网络读——**每个让出点都是切换其他协程的机会**。若同时开多路流，多个 `stream_chat` 可交错推进（下一节的并发同样适用于流）。
+
+### 3.5 结构化并发：TaskGroup（Python 3.11+）
+
+裸 `gather` 有个生产坑：一个子任务抛异常，**其余任务不会被取消**，继续在后台跑（浪费配额、日志错乱）。Python 3.11 引入 `asyncio.TaskGroup` 实现「结构化并发」——**任一子任务失败，自动取消同组其余任务**，且整组作为一个单元向上抛错。类比 Java 21 的 `StructuredTaskScope.ShutdownOnFailure`：一败俱取消。
+
+```python
+# ============================================================
+# TaskGroup 重写批量推理 / Rewrite batch inference with TaskGroup
+# ============================================================
+import asyncio
+
+async def batch_infer_tg(prompts: list[str]) -> list[str]:
+    """结构化并发：一个失败自动取消其余 / one fails -> cancel the rest."""
+    results: list[str] = [""] * len(prompts)
+    # async with 退出时才等全组完成 / group awaited on block exit
+    async with asyncio.TaskGroup() as tg:
+        for i, p in enumerate(prompts):
+            # create_task 立即调度；闭包捕获 i 写回对应槽位
+            tg.create_task(_fill(results, i, p))
+    # 走到这里说明全部成功；任一失败会在 async with 出口抛 ExceptionGroup
+    return results
+
+async def _fill(out: list[str], idx: int, prompt: str) -> None:
+    out[idx] = await call_llm_single(prompt)  # 见下
+
+async def call_llm_single(prompt: str) -> str:
+    await asyncio.sleep(0.1)                   # 占位：真实为 API 调用 / stub
+    if prompt == "boom":
+        raise ValueError("模型拒答 / model refused")
+    return f"answer: {prompt}"
+
+# 对比语义：
+# gather(...)                      → task2 失败，task1/task3 仍在后台跑完
+# TaskGroup + 三个 create_task     → task2 失败，task1/task3 被 cancel，整组抛 ExceptionGroup
+
+async def demo_taskgroup():
+    try:
+        await batch_infer_tg(["a", "boom", "c"])
+    except* ValueError as eg:  # except* 专门解包 ExceptionGroup（3.11+）
+        print(f"整组失败，已取消其余任务 / group cancelled: {eg.exceptions}")
+
+# asyncio.run(demo_taskgroup())
+```
+
+超时同样有了现代写法。旧的 `asyncio.wait_for(coro, timeout)` 只能包一个协程；`asyncio.timeout()` 是**上下文管理器**，能给「一整块代码」设总预算，超时后自动取消块内所有 `await`：
+
+```python
+# ============================================================
+# asyncio.timeout() 上下文写法（3.11+）/ timeout context
+# ============================================================
+async def infer_with_budget(prompts: list[str]) -> list[str]:
+    async with asyncio.timeout(5.0):          # 整块 5 秒总预算 / whole-block budget
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(call_llm_single(p)) for p in prompts]
+        return [t.result() for t in tasks]
+    # 超时会抛 TimeoutError，并取消块内所有未完成任务 / cancels all on timeout
+```
+
+### 3.6 批量容错：让「一个失败」不拖垮整批
+
+生产批处理的第二个坑：默认 `gather` 里一个请求抛异常，**整个 `gather` 立即抛错、已完成结果全丢**。两种容错模式各有适用场景。
+
+**模式 A — `gather(return_exceptions=True)`：** 异常不再中断，而是作为结果元素返回，逐个甄别成功/失败。适合「要拿到完整对齐的结果列表、失败项占位」。
+
+```python
+# ============================================================
+# 模式 A：限流 + 重试 + 收集异常 / throttle + retry + collect
+# 并发度上限 = concurrency；总任务数 N，时间 O(N / concurrency * 单请求耗时)
+# ============================================================
+import asyncio, random
+
+async def call_with_retry(prompt: str, sem: asyncio.Semaphore,
+                          max_retry: int = 3) -> str:
+    async with sem:                                  # 限流：同时最多 sem 个在飞
+        for attempt in range(1, max_retry + 1):
+            try:
+                return await call_llm_single(prompt)
+            except Exception as e:
+                if attempt == max_retry:
+                    raise                            # 用尽重试，抛给上层收集
+                # 指数退避 + 抖动，避免重试风暴 / backoff + jitter
+                await asyncio.sleep(2 ** attempt * 0.1 + random.random() * 0.1)
+    raise RuntimeError("unreachable")
+
+async def batch_tolerant(prompts: list[str], concurrency: int = 5) -> list:
+    sem = asyncio.Semaphore(concurrency)
+    tasks = [call_with_retry(p, sem) for p in prompts]
+    # return_exceptions=True：失败项以异常对象出现在结果里，不中断整批
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    ok = [r for r in results if not isinstance(r, Exception)]
+    bad = [r for r in results if isinstance(r, Exception)]
+    print(f"成功 {len(ok)} / 失败 {len(bad)}")
+    return results  # 与输入一一对齐 / positionally aligned with prompts
+```
+
+**模式 B — `asyncio.as_completed`：** 谁先完成先拿谁，适合「边完成边落盘/边刷进度」的流式收尾，不必等最慢的那个。
+
+```python
+# ============================================================
+# 模式 B：按完成顺序消费 / consume in completion order
+# ============================================================
+async def batch_stream_done(prompts: list[str], concurrency: int = 5):
+    sem = asyncio.Semaphore(concurrency)
+    tasks = [call_with_retry(p, sem) for p in prompts]
+    # as_completed 返回一个「谁先好谁先出」的迭代器 / yields as each finishes
+    for coro in asyncio.as_completed(tasks):
+        try:
+            result = await coro
+            print(f"完成一条: {result}")   # 可在此处立即写库/刷新进度条
+        except Exception as e:
+            print(f"跳过失败项: {e}")      # 单点失败不影响其余继续
+```
+
+选型：**要对齐结果**用 A（`return_exceptions`）；**要尽早消费/低延迟落盘**用 B（`as_completed`）；**要一败全停、干净收场**用 3.5 的 `TaskGroup`。
+
 ## 4. 详细推理（Deep Dive）
 
+### 4.1 单线程为何能扛住高并发 I/O？
+
+核心洞察：**I/O 密集型任务的绝大部分时间在「等」，而不是在「算」**。一次 LLM 请求可能等 2 秒网络、只花几微秒解析。多线程为了这 2 秒的等待各占一个线程栈（Python 线程约 8MB 栈 + GIL 抢占），成本极高。
+
+事件循环换了个思路——**用「等待」的空档去推进别的任务**：
+
 ```
-asyncio 事件循环 vs Java 线程池:
+一个协程调 await 时会发生什么（机制推导）:
 
-Python asyncio:
-  - 单线程事件循环（不受 GIL 影响，因为是 IO 等待）
-  - 适合 I/O 密集型（网络请求、文件读写）
-  - 不适合 CPU 密集型（用 multiprocessing）
+  1. 协程执行到 `await session.get(url)`
+  2. 底层把这个 socket 注册到 OS 的 I/O 多路复用器
+     （epoll/kqueue），然后【把控制权交还事件循环】—— 这就是「让出点」
+  3. 事件循环不空等：立刻挑另一个「就绪」的协程接着跑
+  4. 网络数据回来后，epoll 通知事件循环「这个 socket 好了」
+  5. 事件循环把对应协程标记为就绪，下一轮调度它从 await 处【恢复】
 
-Java 线程池:
-  - 多线程真并行
-  - 适合 CPU 和 I/O 密集型
-  - 线程开销大（虚拟线程改善了这点）
-
-Python 并发选择:
-  IO 密集 → asyncio（协程，最轻量）
-  CPU 密集 → multiprocessing（多进程，绕过 GIL）
-  混合场景 → concurrent.futures（线程/进程池）
+  → 单线程串行地推进 N 个协程，但因为「等」的时间被互相填满，
+    墙上时钟 ≈ 最慢那个请求，而非 N 个之和。
 ```
+
+对标 Java：这正是 Netty/WebFlux 的 Reactor 模型——少量 event-loop 线程 + 非阻塞 I/O。Java 21 虚拟线程则是另一条路（保留阻塞写法、由 JVM 在底层挂起载体线程），殊途同归，都是「别让线程干等」。
+
+### 4.2 让出点到底在哪？——只有 `await` 会让出
+
+这是新手最大的误区：**协程不是随时被抢占的，只有执行到 `await`（且该 await 真的要等）时才让出控制权**。这是「协作式调度」，区别于线程的「抢占式调度」。
+
+```python
+import asyncio
+
+async def bad():
+    total = 0
+    for i in range(10**8):   # ← 纯 CPU 循环，中间【没有 await】
+        total += i           #   事件循环被彻底霸占，其他协程全饿死
+    return total
+# 后果：这段跑几秒，同一循环里的所有其他协程一个都推进不了
+
+async def cpu_bound(n: int) -> int:
+    return sum(range(n))     # 同样是纯 CPU，不该直接在协程里跑
+
+async def good():
+    # to_thread 把阻塞/CPU 活儿丢到线程池，await 处让出事件循环
+    return await asyncio.to_thread(cpu_bound, 10**8)
+```
+
+推论：`await asyncio.sleep(0)` 是一个「主动让出」的惯用法——它不真等，只是给事件循环一次调度其他协程的机会（相当于协作式的 `yield`）。
+
+### 4.3 CPU 密集为什么必须 `to_thread` / 多进程？
+
+因为 4.2：CPU 密集代码没有 `await`，会**卡死整个事件循环**。解法取决于活儿的性质：
+
+```
+选型决策（按「等 vs 算」区分）:
+
+  纯等待的 I/O（网络/磁盘）      → asyncio 协程          最轻量，天生适配
+  阻塞式库调用（老 SDK、无 async）→ asyncio.to_thread(fn)  丢线程池，await 让出
+  CPU 密集且【释放 GIL】的库
+    （numpy/torch 底层是 C）      → to_thread 也够          C 层不占 GIL，真并行
+  CPU 密集且【纯 Python】
+    （手写循环、正则、纯 Python 解析）→ ProcessPoolExecutor   多进程绕过 GIL
+```
+
+关键分水岭是 **GIL**：`to_thread` 起的是真线程，但纯 Python 计算受 GIL 串行化、并发无收益；只有当阻塞发生在 C 扩展里（numpy 矩阵、torch 前向、文件 syscall）——这些代码会**释放 GIL**——线程才真正并行。纯 Python 的 CPU 活儿只能靠多进程各自独立解释器来绕开 GIL。
+
+> 一句话记忆：**`await` 是给「等」用的让出点；`to_thread` 是给「算」用的逃生舱；多进程是「纯 Python 硬算」的最后手段。**
+
+（注：Python 3.13 起有实验性 free-threaded / no-GIL 构建，但 2026 生产默认仍是带 GIL 的解释器，上述选型依然成立。）
 
 ## 5. 例题（Worked Examples）
 

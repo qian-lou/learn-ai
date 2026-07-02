@@ -13,6 +13,7 @@
 | 01 | [transformers-library](./01-transformers-library.md) | Transformers 库入门 | `pipeline` 一行完成 NLP 任务、`Auto*` 类自动推断并加载模型、`generate` 采样参数（temperature/top_p）、fp16 与 4-bit 量化加载 |
 | 02 | [datasets](./02-datasets.md) | Datasets 库 | 从 Hub/本地一行加载、Arrow 后端零拷贝与内存映射、`.map(batched=True)` 向量化预处理、`streaming=True` 处理 TB 级语料不 OOM |
 | 03 | [trainer-api](./03-trainer-api.md) | Trainer API | `TrainingArguments` 一份配置封装完整训练循环、`compute_metrics` 自定义指标、`DataCollatorWithPadding` 动态填充、EarlyStopping 与自定义 loss |
+| 04 | [multimodal-inference](./04-multimodal-inference.md) | 多模态推理与视觉 RAG | VLM（Qwen2.5-VL）图文推理、OpenAI/Claude 视觉 API（image_url/base64）、视觉 RAG（PDF 渲染成图 + CLIP 跨模态检索）、图片 → 强类型结构化抽取 |
 
 ---
 
@@ -56,6 +57,21 @@
   - 自定义 `compute_loss` 新签名带 `num_items_in_batch=None` 参数。
 - **Java 视角**：`Trainer` ≈ Spring Boot 的"约定优于配置"——给一份配置就跑起整条流程；`TrainingArguments` ≈ `application.yml`。
 - **前置**：01、02（模型与数据集）。
+
+### 04 · 多模态推理与视觉 RAG
+
+- **核心概念**：2026 主流模型已原生多模态。VLM = 视觉编码器（切 patch → 投影到 LLM token 空间）+ LLM，能对图文联合推理；视觉信息（发票/图表/扫描件）从此可被读取与检索。
+- **关键 API**：
+  - 开源：`Qwen2_5_VLForConditionalGeneration` + `AutoProcessor` + `process_vision_info`，`content` 由 `image` + `text` 组成。
+  - 闭源：OpenAI `content` 里加 `image_url`（http 或 base64 data URI）；Claude 用 `source(base64, media_type)`。
+  - 视觉 RAG：`pdf2image.convert_from_path` 渲染每页 → `CLIPModel.get_image_features` 编码 → 文本 query 跨模态检索。
+  - 结构化：`response_format=Pydantic 模型`，图片直接抽成强类型对象。
+- **易错点**：
+  - 图像 token 数 ≈ `(H/p)×(W/p)`，高分辨率图**极贵**——先缩放到"够读清关键信息"的最小分辨率，善用 `detail:"low"/"high"`。
+  - 纯文本 RAG 会漏扫描件/图表，但文字型 PDF 仍应走文本切分（更省更精）；两路按内容分流。
+  - VLM 会"看错"字符（8↔3）：关键字段加原文溯源 + 交叉核对 + 业务规则校验。
+- **Java 视角**：VLM ≈ 重载了图像入参的 `chat(text, image)`；图片 → Pydantic ≈ 图片 → 校验过的 POJO。
+- **前置**：01（transformers 推理）、03-rag（检索链路）。
 
 ---
 

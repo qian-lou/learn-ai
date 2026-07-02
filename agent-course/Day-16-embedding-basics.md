@@ -93,6 +93,55 @@ python day16_embed.py
 
 > 小贴士：`normalize_embeddings=True` 后向量模长为 1，余弦相似度 == 点积，省一步除法。生产里几乎都开归一化。
 
+**Step 3 — 两条嵌入路线：本地 vs API（生产选型）**
+
+上面的 `bge-m3` 是**本地路线**：首跑要下载约 2GB 权重、跑得快但吃 GPU/内存。生产上还有一条**API 路线**——不占本地资源，一次 HTTP 拿向量：
+
+```python
+from openai import OpenAI
+
+# ============================================================
+# API 嵌入：OpenAI text-embedding-3，批量 + 降维
+# 需 OPENAI_API_KEY / needs API key
+# ============================================================
+client = OpenAI()
+
+
+def embed_api(texts: list[str], dim: int = 512) -> list[list[float]]:
+    """批量取 API 嵌入。时间 O(1) 次请求，空间 O(n·dim)。
+
+    Args:
+        texts: 待嵌入文本列表（单请求上限约 2048 条）/ up to ~2048 per call.
+        dim: 目标维度，MRL 特性支持把 1536 维截短到 512 省存储 / Matryoshka dims.
+
+    Returns:
+        与输入顺序对齐的向量列表 / vectors aligned to input order.
+    """
+    resp = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=texts,          # 批量：一次传多条，省往返 / batch to cut round-trips
+        dimensions=dim,       # 降维：1536→512，检索更快、存储减半
+    )
+    return [d.embedding for d in resp.data]   # data 顺序保证与 input 一致
+
+
+vecs = embed_api(["猫喜欢晒太阳", "今天的股票大跌了"])
+print(len(vecs), len(vecs[0]))   # 2 512
+```
+
+两条路线怎么选：
+
+| 维度 | 本地 `bge-m3` | API `text-embedding-3` |
+|------|--------------|------------------------|
+| 向量维度 | 1024（固定） | 1536，可 `dimensions` 降到 512/256 |
+| 起步成本 | 首跑下 ~2GB 权重 | 无，直接调 |
+| 是否需 GPU | 建议有（CPU 慢） | 不需要 |
+| 单位成本 | 0 元（自备算力） | 按 token 计费（量级 $0.02/1M tokens） |
+| 延迟 | 本地快、无网络往返 | 有网络往返 + 限流 |
+| 数据出境 | 不出本机（合规友好） | 文本发往第三方 |
+
+> **选型结论**：数据敏感 / 已有 GPU / 高频海量 → **本地**；无 GPU、快速起步、量不大 → **API**。切换成本极低——**只需把 `model.encode(...)` 换成 `embed_api(...)` 一行**，检索逻辑完全不动；换 API 时注意批大小上限与限流重试（见 Day-19 ETL）。
+
 ## 3. 今日任务
 
 1. 跑通 `day16_embed.py`，确认"语义近的句子分数高、无关的分数低"。

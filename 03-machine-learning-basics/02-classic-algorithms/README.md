@@ -16,6 +16,7 @@
 | 04 | [svm](./04-svm.md) | 支持向量机 | 最大间隔、Hinge Loss 与软间隔 C、对偶问题与 KKT、核技巧（线性/RBF/poly）、OvO/OvR 多分类、大数据禁区 |
 | 05 | [clustering](./05-clustering.md) | 聚类算法 | KMeans（Lloyd 迭代+k-means++）、DBSCAN（密度可达+噪声）、层次聚类、GMM/EM、选 K（肘部/轮廓系数） |
 | 06 | [model-evaluation](./06-model-evaluation.md) | 模型评估与调优 | 混淆矩阵、Precision/Recall/F1、AUC-ROC、交叉验证（StratifiedKFold）、GridSearchCV、过拟合检测 |
+| 07 | [gradient-boosting](./07-gradient-boosting.md) | 梯度提升 | Boosting 串行拟合负梯度降偏差、shrinkage、XGBoost 二阶泰勒+正则、LightGBM leaf-wise+直方图、早停、超参偏差-方差定位 |
 
 ---
 
@@ -68,6 +69,14 @@
 - **易错点**：① 不平衡数据上 Accuracy 会骗人（全猜多数类也能 99%），改用 F1/AUC-ROC；② 分类交叉验证要用 `StratifiedKFold` 保持各折类别比例；③ AUC-ROC 衡量排序能力、与阈值无关，Precision/Recall 依赖阈值，别混用。
 - **Java 视角**：选指标 = 选 SLA。医疗诊断保 Recall（不能漏诊）、垃圾邮件保 Precision（不能误杀），正如不同服务对「延迟」和「可用性」的权衡取舍不同。
 - **前置**：01-05 各算法（评估的对象）。
+
+### 07 · 梯度提升（GBDT / XGBoost / LightGBM）
+
+- **核心概念**：串行造很多棵**浅弱树**，每棵专门拟合当前集成的残差/负梯度，逐步降**偏差**——与随机森林"并行降方差"方向相反。结构化表格数据的常胜算法。
+- **关键公式/API**：负梯度（平方损失下即残差 `y-F`）+ shrinkage 累加 `F += lr·hₘ`；XGBoost 二阶泰勒展开给出叶子最优权重 `w* = -Σg/(Σh+λ)`；`HistGradientBoostingClassifier`（免装库）、`XGBClassifier`/`LGBMClassifier` + `early_stopping` + `eval_set`。
+- **易错点**：① Boosting **会**过拟合（不像 RF 越多越稳），必须 shrinkage + 早停封顶 `n_estimators`；② 早停的 `eval_set` 要用独立验证集，拿测试集早停会泄漏；③ 特征重要性默认口径 `'weight'/'split'`（被选次数）偏向高基数特征，看贡献优先用 `'gain'` 或排列重要性；④ LightGBM 的 leaf-wise 更易过拟合，须用 `num_leaves`+`min_child_samples` 约束。
+- **Java 视角**：Boosting ≈ 迭代式错误修正的**责任链**——每个 handler（树）只处理上一环留下的残差，链越长逼近越准，但过长会拟合噪声，需早停"截断责任链"。
+- **前置**：03 决策树/随机森林（基学习器与 Bagging 对照）、math-foundations 的梯度下降（Boosting 是"函数空间的梯度下降"）。
 
 ---
 
